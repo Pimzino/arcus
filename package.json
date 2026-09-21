@@ -1,0 +1,41 @@
+{
+  "name": "rclone-gui",
+  "private": true,
+  "version": "0.5.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test": "vitest run",
+    "release": "node scripts/release.mjs"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.102.8",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2.7.3",
+    "@tauri-apps/plugin-opener": "^2",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.46.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^26.5.1",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^6.0.2",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "^5.0.1"
+  },
+  "description": "Cross-platform desktop GUI for rclone",
+  "license": "GPL-3.0-only"
+}
