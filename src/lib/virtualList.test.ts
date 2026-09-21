@@ -12,6 +12,14 @@ describe("visibleRange", () => {
     expect(visibleRange(view(2600), 1000, 5)).toEqual({ start: 93, end: 114 });
   });
 
+  it("snaps both ends outwards to whole chunks, so scrolling within a chunk keeps the range", () => {
+    // Rows 98–108 in view, 93–113 with the overscan.
+    expect(visibleRange(view(2600), 1000, 5, 10)).toEqual({ start: 90, end: 120 });
+    expect(visibleRange(view(2700), 1000, 5, 10)).toEqual({ start: 90, end: 120 });
+    expect(visibleRange(view(0), 1000, 5, 10)).toEqual({ start: 0, end: 20 });
+    expect(visibleRange(view(2368), 100, 5, 10)).toEqual({ start: 80, end: 100 });
+  });
+
   it("stays within the list", () => {
     expect(visibleRange(view(0), 1000, 5)).toEqual({ start: 0, end: 14 });
     expect(visibleRange(view(2368), 100, 5)).toEqual({ start: 85, end: 100 });

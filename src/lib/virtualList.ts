@@ -11,11 +11,17 @@ export type ListViewport = {
   rowHeight: number;
 };
 
-/** The rows worth rendering, from `start` up to but excluding `end`: those in view plus `overscan` more on each side. */
-export function visibleRange(view: ListViewport, count: number, overscan: number): { start: number; end: number } {
+/**
+ * The rows worth rendering, from `start` up to but excluding `end`: those in view plus at least `overscan` more
+ * on each side. Both ends snap outwards to a multiple of `chunk`, so the range stays the same while the list
+ * scrolls within a chunk and most scroll events change nothing.
+ */
+export function visibleRange(view: ListViewport, count: number, overscan: number, chunk = 1): { start: number; end: number } {
   const top = view.scrollTop - view.rowsTop;
-  const end = Math.max(0, Math.min(count, Math.ceil((top + view.height) / view.rowHeight) + overscan));
-  const start = Math.min(end, Math.max(0, Math.floor(top / view.rowHeight) - overscan));
+  const last = Math.ceil((top + view.height) / view.rowHeight) + overscan;
+  const first = Math.floor(top / view.rowHeight) - overscan;
+  const end = Math.max(0, Math.min(count, Math.ceil(last / chunk) * chunk));
+  const start = Math.min(end, Math.max(0, Math.floor(first / chunk) * chunk));
   return { start, end };
 }
 

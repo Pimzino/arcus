@@ -71,8 +71,13 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "bas
 
 /** Height of a listing row in px; FileRow's h-9 has to match. */
 const ROW_HEIGHT = 36;
-/** Rows rendered past each edge of the visible ones, so that short scrolls reveal rows already rendered. */
-const OVERSCAN = 20;
+/**
+ * Rows rendered past each edge of the visible ones. A trackpad fling passes 30,000 px/s, and WebKit paints its
+ * tiles ahead of the view: rows that are not there yet get painted as blank and again once they arrive.
+ */
+const OVERSCAN = 40;
+/** The rendered range moves in steps of this many rows, so that most scroll events leave the DOM alone. */
+const RANGE_CHUNK = 20;
 
 function sortItems<T extends ListItem>(items: T[], key: SortKey, dir: 1 | -1): T[] {
   return [...items].sort((a, b) => {
@@ -850,7 +855,7 @@ function FileRows({
     const rows = rowsRef.current;
     if (!list || !rows) return;
     const update = () => {
-      const next = visibleRange(listViewport(list, rows), items.length, OVERSCAN);
+      const next = visibleRange(listViewport(list, rows), items.length, OVERSCAN, RANGE_CHUNK);
       setRange((cur) => (cur.start === next.start && cur.end === next.end ? cur : next));
     };
     // Render the rows a scroll or resize brings into view before the browser paints it.
@@ -869,7 +874,9 @@ function FileRows({
   const start = Math.min(range.start, items.length);
   const end = Math.min(range.end, items.length);
   return (
-    <div ref={rowsRef} style={{ height: items.length * ROW_HEIGHT, paddingTop: start * ROW_HEIGHT }}>
+    // Each row is placed by its index. Were the rows in flow below a spacer, every new range would lay this
+    // whole block out again and repaint it, mid-scroll.
+    <div ref={rowsRef} className="relative" style={{ height: items.length * ROW_HEIGHT }}>
       {items.slice(start, end).map((item, i) => (
         <FileRow
           key={item.key}
@@ -906,8 +913,9 @@ const FileRow = memo(function FileRow({
       aria-selected={selected !== null}
       data-name={item.Name}
       draggable
+      style={{ top: index * ROW_HEIGHT }}
       className={cn(
-        "grid h-9 cursor-default grid-cols-[minmax(0,1fr)_92px_168px] items-center border-b border-border text-sm transition-colors",
+        "absolute inset-x-0 grid h-9 cursor-default grid-cols-[minmax(0,1fr)_92px_168px] items-center border-b border-border text-sm transition-colors",
         selected === "active" ? "bg-muted text-foreground" : selected === "inactive" ? "bg-muted/50" : "hover:bg-muted/50",
         dropTarget && "ring-2 ring-inset ring-primary/70",
       )}
