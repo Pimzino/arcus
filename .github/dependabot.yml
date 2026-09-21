@@ -1,0 +1,16 @@
+# Dependabot keeps the actions in .github/workflows up to date. They are pinned to commit SHAs so that a
+# moved tag cannot change what runs with write access to releases, and a pin gets no fixes by itself:
+# Dependabot opens a pull request that moves the SHA and its version comment together.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # One pull request for all actions rather than one each.
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "CI"
