@@ -220,6 +220,8 @@ mod tests {
         assert_eq!(bundle_from_exe(Path::new("rclone-gui")), None);
     }
 
+    // Reads the plists with /usr/bin/plutil, which only macOS has; the feature is macOS-only too.
+    #[cfg(target_os = "macos")]
     #[test]
     fn legacy_installs_need_the_old_name_and_this_identifier() {
         let home = std::env::temp_dir().join(format!("rclone-gui-legacy-{}", std::process::id()));
