@@ -23,9 +23,7 @@ const BIN = resolve(process.env.ARCUS_BIN ?? "src-tauri/target/release/rclone-gu
 const DRIVER = "http://127.0.0.1:4444";
 const ARTIFACTS = resolve("e2e/artifacts");
 const ELEMENT = "element-6066-11e4-a52e-4f735466cecf";
-// WebDriver key codes: Enter, Control, and NULL (releases the modifiers pressed so far).
-const ENTER = "\uE007";
-const SELECT_ALL = "\uE009a\uE000";
+const ENTER = "\uE007"; // WebDriver's Enter key
 
 if (!existsSync(BIN)) throw new Error(`No app binary at ${BIN}; build it first or set ARCUS_BIN.`);
 mkdirSync(ARTIFACTS, { recursive: true });
@@ -56,6 +54,8 @@ async function wd(method, path, body) {
     method,
     headers: { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
+    // No WebDriver call should take this long; a hung one fails the test instead of the whole job.
+    signal: AbortSignal.timeout(90_000),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${JSON.stringify(json.value ?? json).slice(0, 400)}`);
@@ -101,9 +101,24 @@ async function openPath(pane, path) {
   const scope = `section[aria-label="Pane ${pane}"]`;
   await click(await find(`${scope} button[aria-label="Edit path"]`));
   const input = await waitFor(`the path field of pane ${pane}`, () => find(`${scope} input`));
-  // Select what is there and type over it, as a person would. Not WebDriver's "clear": it blurs the field,
-  // and the path bar commits and closes on blur.
-  await type(input, SELECT_ALL + path + ENTER);
+  // Select what is there and type over it. Not WebDriver's "clear", which blurs the field (the path bar
+  // commits and closes on blur), nor Ctrl+A: WebKitWebDriver keeps Ctrl held for the keys after it, and
+  // Ctrl+digit switches pages.
+  await run("arguments[0].select();", { [ELEMENT]: input });
+  await type(input, path);
+  const typed = await run("return arguments[0].value;", { [ELEMENT]: input });
+  if (typed !== path) {
+    // Typing went somewhere else in the field; set its value the way React notices, and say so.
+    log(`(pane ${pane}: typing left ${JSON.stringify(typed)}; setting the value instead)`);
+    await run(
+      `const el = arguments[0];
+       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, arguments[1]);
+       el.dispatchEvent(new Event("input", { bubbles: true }));`,
+      { [ELEMENT]: input },
+      path,
+    );
+  }
+  await type(input, ENTER);
   await waitFor(`pane ${pane} to show ${path}`, () =>
     run(`return document.querySelector(arguments[0])?.textContent.includes(arguments[1]);`, scope, path.split("/").pop()),
   );

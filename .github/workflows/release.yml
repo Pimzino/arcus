@@ -106,6 +106,7 @@ jobs:
     needs: [test, draft-release]
     # Built on the oldest supported Ubuntu, so the AppImage runs on distributions with an older glibc too.
     runs-on: ubuntu-22.04
+    timeout-minutes: 40
     permissions:
       contents: write
     steps:
@@ -118,6 +119,8 @@ jobs:
       - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: src-tauri
+          # Keep the build even when the test fails, so a rerun does not start from scratch.
+          cache-on-failure: true
       - name: Linux build deps, WebKitWebDriver and a virtual display
         run: |
           sudo apt-get update

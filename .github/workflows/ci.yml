@@ -48,6 +48,7 @@ jobs:
     name: Linux end-to-end
     # The oldest Ubuntu the Linux release is built on (release.yml), so this runs what users run.
     runs-on: ubuntu-22.04
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -58,6 +59,8 @@ jobs:
       - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: src-tauri
+          # Keep the build even when the test fails, so a rerun does not start from scratch.
+          cache-on-failure: true
       - name: Linux webkit deps, WebKitWebDriver and a virtual display
         run: |
           sudo apt-get update
