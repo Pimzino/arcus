@@ -5,7 +5,7 @@
 //   2. The explorer opens a folder in each pane by typing its path.
 //   3. A file is selected and copied to the other pane: it arrives on disk, shows up in the other pane, and
 //      the transfer writes its log file.
-//   4. When its window is closed, no rclone it started is left running.
+//   4. No rclone it started outlives it, whether it quits or is killed.
 //
 // It runs in a throwaway HOME, so it never touches a real profile. Needs a display (xvfb-run in CI),
 // `tauri-driver` and `WebKitWebDriver` on PATH, and network access to rclone.org and GitHub.
@@ -190,14 +190,31 @@ try {
   log(`transfer log: ${transferLog}`);
   await screenshot("3-copied");
 
-  // 4. Closing the window, as a user quits, leaves no rclone behind. (Ending the WebDriver session instead
-  // would only kill the process it started, which for an AppImage is the launcher, not the app.)
-  if (!rcloneProcesses().length) throw new Error("no rclone process was found while the app was running");
+  // 4. No rclone outlives the app. The app is the parent of its rclone processes. First the window is closed;
+  // WebKitWebDriver's "close window" may only close the page, not the window, in which case the app keeps
+  // running, so it then gets SIGTERM, as at logout, which it does not handle: it dies, and the kernel must
+  // take its rclone with it (PR_SET_PDEATHSIG).
+  const rclones = rcloneProcesses();
+  if (!rclones.length) throw new Error("no rclone process was found while the app was running");
+  const apps = [...new Set(rclones.map((pid) => execFileSync("ps", ["-o", "ppid=", "-p", pid], { encoding: "utf8" }).trim()))];
+  log(`app process ${apps.join(", ")} runs rclone ${rclones.join(", ")}`);
   await wd("DELETE", `/session/${session}/window`).catch((e) => log(`(closing the window: ${e.message})`));
-  await waitFor("every rclone the app started to exit", () => rcloneProcesses().length === 0, { timeout: 30_000 });
-  await wd("DELETE", `/session/${session}`).catch(() => undefined);
   session = undefined;
-  log("window closed, no rclone left running");
+  const quit = await waitFor("rclone to exit after the window closed", () => rcloneProcesses().length === 0, { timeout: 10_000 }).catch(() => false);
+  if (quit) {
+    log("window closed: the app quit and no rclone is left running");
+  } else {
+    log("closing the window did not quit the app; sending it SIGTERM");
+    for (const pid of apps) {
+      try {
+        process.kill(Number(pid), "SIGTERM");
+      } catch {
+        /* already gone */
+      }
+    }
+    await waitFor("every rclone to exit once the app was killed", () => rcloneProcesses().length === 0, { timeout: 20_000 });
+    log("app killed: its rclone exited with it");
+  }
   log("PASSED");
 } catch (e) {
   failed = true;
