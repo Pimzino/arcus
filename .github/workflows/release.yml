@@ -1,50 +1,26 @@
-name: Build
+name: Release
 
-# Pushes to main and pull requests run the Rust tests and the type check. Only a version tag, pushed by
-# `npm run release` (see README "Releases"), builds the bundles, which take most of a run's minutes, and
+# A version tag, pushed by `npm run release` (see README "Releases"), tests the commit, builds the bundles and
 # publishes them as a GitHub release whose notes are that version's CHANGELOG.md section: the release is
 # drafted first, each bundle job attaches its files, and it is published only once every bundle is there.
+# Everyday pushes and pull requests are ci.yml's job.
 
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-  pull_request:
 
 permissions:
   contents: read
 
 jobs:
   test:
-    name: Rust tests and type check
-    # `npm run release` pushes main and the version tag together, and each ref starts a run of the same
-    # commit. The tag's run tests, builds and publishes it, so main's run of a "Release vX.Y.Z" commit is
-    # skipped: every other job needs this one, so they are skipped with it.
-    if: ${{ !(github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release v')) }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
-      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          workspaces: src-tauri
-      - name: Linux webkit deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
+    name: Tests
+    uses: ./.github/workflows/ci.yml
 
   draft-release:
     name: Draft release
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -56,14 +32,13 @@ jobs:
           # Fails unless the tag matches the version in every file that records it.
           node scripts/release.mjs notes "$GITHUB_REF_NAME" > notes.md
           if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" --title "Rclone GUI $GITHUB_REF_NAME" --notes-file notes.md
+            gh release edit "$GITHUB_REF_NAME" --title "Arcus $GITHUB_REF_NAME" --notes-file notes.md
           else
-            gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Rclone GUI $GITHUB_REF_NAME" --notes-file notes.md
+            gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Arcus $GITHUB_REF_NAME" --notes-file notes.md
           fi
 
   bundle:
     name: Bundle (${{ matrix.name }})
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: [test, draft-release]
     permissions:
       contents: write
@@ -128,9 +103,8 @@ jobs:
 
   publish-release:
     name: Publish release
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: bundle
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
