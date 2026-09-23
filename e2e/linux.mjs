@@ -23,7 +23,9 @@ const BIN = resolve(process.env.ARCUS_BIN ?? "src-tauri/target/release/rclone-gu
 const DRIVER = "http://127.0.0.1:4444";
 const ARTIFACTS = resolve("e2e/artifacts");
 const ELEMENT = "element-6066-11e4-a52e-4f735466cecf";
-const ENTER = "\uE007"; // WebDriver's Enter key
+// WebDriver key codes: Enter, Control, and NULL (releases the modifiers pressed so far).
+const ENTER = "\uE007";
+const SELECT_ALL = "\uE009a\uE000";
 
 if (!existsSync(BIN)) throw new Error(`No app binary at ${BIN}; build it first or set ARCUS_BIN.`);
 mkdirSync(ARTIFACTS, { recursive: true });
@@ -99,8 +101,9 @@ async function openPath(pane, path) {
   const scope = `section[aria-label="Pane ${pane}"]`;
   await click(await find(`${scope} button[aria-label="Edit path"]`));
   const input = await waitFor(`the path field of pane ${pane}`, () => find(`${scope} input`));
-  await wd("POST", `/session/${session}/element/${input}/clear`, {});
-  await type(input, path + ENTER);
+  // Select what is there and type over it, as a person would. Not WebDriver's "clear": it blurs the field,
+  // and the path bar commits and closes on blur.
+  await type(input, SELECT_ALL + path + ENTER);
   await waitFor(`pane ${pane} to show ${path}`, () =>
     run(`return document.querySelector(arguments[0])?.textContent.includes(arguments[1]);`, scope, path.split("/").pop()),
   );
