@@ -64,16 +64,21 @@ jobs:
       - name: Linux webkit deps, WebKitWebDriver and a virtual display
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf webkit2gtk-driver xvfb
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf file libfuse2 webkit2gtk-driver xvfb
       - name: tauri-driver
         run: cargo install tauri-driver --locked
       - run: npm ci
-      - name: Build the app
-        run: npm run tauri build -- --no-bundle
-      - name: Use the app like a first-time user
-        run: xvfb-run -a node e2e/linux.mjs
+      - name: Build the AppImage
+        # The file people download, built the way release.yml builds it, so a release has nothing untried.
+        run: npm run tauri build -- --bundles appimage
+      - name: Use the AppImage like a first-time user
+        shell: bash
+        run: |
+          appimage=(src-tauri/target/release/bundle/appimage/*.AppImage)
+          chmod +x "${appimage[0]}"
+          ARCUS_BIN="${appimage[0]}" xvfb-run -a node e2e/linux.mjs
         env:
-          ARCUS_BIN: src-tauri/target/release/rclone-gui
+          APPIMAGE_EXTRACT_AND_RUN: "1"
       - name: Keep the screenshots
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
