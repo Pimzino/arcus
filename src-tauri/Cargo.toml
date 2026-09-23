@@ -1,6 +1,6 @@
 [package]
 name = "rclone-gui"
-version = "0.5.1"
+version = "0.6.0"
 description = "Cross-platform desktop GUI for rclone"
 authors = ["Pimzino"]
 license = "GPL-3.0-only"

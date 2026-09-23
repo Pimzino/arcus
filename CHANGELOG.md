@@ -2,6 +2,25 @@
 
 Every release of Arcus, newest first, with the commits it added since the release before it.
 
+## v0.6.0 (2026-09-23)
+
+- Rename the app to Arcus, with a new logo, icon and wordmark ([13ff7fc](https://github.com/Pimzino/arcus/commit/13ff7fc5a9dfbc31a1e207b6e88a2615d63dabe6))
+- Upgrading from Rclone GUI replaces the old app and keeps its data ([8bb931b](https://github.com/Pimzino/arcus/commit/8bb931b2320f79dc27e63dda94d8e1eb8ee7057e))
+- CI: tests and release builds are separate workflows, and the UI's tests run too ([d0d8de0](https://github.com/Pimzino/arcus/commit/d0d8de0644c376485a82fa08d646750a8a0612d1))
+- README: download and upgrade guide, status badges, tidier features ([123292e](https://github.com/Pimzino/arcus/commit/123292e25fa0f81326b521d8346e48eaae809483))
+- Tests: the check for an old Rclone GUI copy runs on macOS only ([73a1f61](https://github.com/Pimzino/arcus/commit/73a1f6149763a3d5a34c218e072ab3143c3db68e))
+- Windows: the MSI removes Rclone GUI's old shortcuts when it upgrades ([3adc698](https://github.com/Pimzino/arcus/commit/3adc698218ae4735c24b88d01b64d7d42a94c400))
+- Linux: fixes ahead of the first Linux builds ([9e44860](https://github.com/Pimzino/arcus/commit/9e44860f8fdc64613d566e7df9fe0f697d7202e7))
+- Linux builds, tested end to end before they are published ([9051b00](https://github.com/Pimzino/arcus/commit/9051b009a87e93663a62b3f558c0c2fa069f6f4f))
+- Linux end-to-end test: type a path over the old one instead of clearing it ([cc441dd](https://github.com/Pimzino/arcus/commit/cc441ddbba88235dc580b0c58657b6a8ab51aa4f))
+- Linux end-to-end test: type paths without modifier keys, and time out instead of hanging ([ba1177e](https://github.com/Pimzino/arcus/commit/ba1177efa553152fbe81728537d461cd6bd31493))
+- Linux is listed with macOS and Windows: README badge and downloads, package metadata ([42844fd](https://github.com/Pimzino/arcus/commit/42844fd3250f5b58d07e98c431b403d13f0bfa44))
+- CI: the Linux end-to-end test runs on the AppImage, as the release does ([19c4772](https://github.com/Pimzino/arcus/commit/19c4772abadeb5475596dba2217f3cd43d87de31))
+- Linux end-to-end test: quit by closing the window, as a user does ([bb7e708](https://github.com/Pimzino/arcus/commit/bb7e7081cc3fc5bfe4574b74766a531a73994cfa))
+- Linux end-to-end test: check that rclone dies with the app ([6264a03](https://github.com/Pimzino/arcus/commit/6264a03595d503ae4132a731641dbc5bc76249e0))
+
+All changes: [v0.5.1...v0.6.0](https://github.com/Pimzino/arcus/compare/v0.5.1...v0.6.0)
+
 ## v0.5.1 (2026-09-21)
 
 - CI: Dependabot proposes updates for the pinned actions ([90624c6](https://github.com/Pimzino/arcus/commit/90624c6ff580b11d2c1b33a55049e5f0a5602f3b))
