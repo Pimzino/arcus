@@ -240,6 +240,11 @@ pub fn classify(line: &LogLine) -> Option<ActivityKind> {
     if line.msg.starts_with("Config file ") && line.msg.ends_with("not found - using defaults") {
         return None;
     }
+    // Box's background token refresh checks the remote's root with a lookup meant for files, so
+    // a folder root always ends in this error, and only after Box accepted the new token.
+    if line.msg == "Background token refresher failed: is a directory not a file" {
+        return Some(ActivityKind::Info);
+    }
     if line.level >= Level::Error {
         return Some(ActivityKind::Error);
     }
@@ -500,6 +505,9 @@ mod tests {
         let rc_error = line(r#"{"time":"t","level":"error","msg":"rc: \"job/stop\": error: job not found","source":"rcserver/rcserver.go:187"}"#);
         assert_eq!(classify(&rc_error), None, "the rc server's lines are not the job's");
         assert_eq!(kind("Config file /x/rclone.conf not found - using defaults", "notice"), None);
+        let box_refresh = line(r#"{"time":"t","level":"error","msg":"Background token refresher failed: is a directory not a file","object":"box root 'IT_MAM/Story Films'","objectType":"string","source":"oauthutil/renew.go:54"}"#);
+        assert_eq!(classify(&box_refresh), Some(ActivityKind::Info), "the refresh worked; Box only answered about a folder");
+        assert_eq!(kind("Background token refresher failed: couldn't fetch token: invalid_grant", "error"), Some(ActivityKind::Error));
     }
 
     #[test]
