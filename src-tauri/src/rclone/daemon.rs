@@ -164,6 +164,21 @@ pub(super) fn spawn_rcd(
         .kill_on_drop(true);
     #[cfg(windows)]
     cmd.creation_flags(super::provision::CREATE_NO_WINDOW);
+    // Linux: if the app dies without quitting rclone (killed, or the session ends), the kernel sends rclone
+    // SIGTERM, which it handles by shutting down (and unmounting). Otherwise a transfer's rclone, which is
+    // recorded nowhere, would keep running. The signal is tied to the *thread* that spawns the child, so
+    // this function must be called from the async runtime's workers, which live as long as the app, never
+    // from a spawn_blocking thread, which exits when idle and would take rclone with it.
+    #[cfg(target_os = "linux")]
+    // SAFETY: the closure only makes the prctl system call, which is async-signal-safe.
+    unsafe {
+        cmd.pre_exec(|| {
+            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
 
     let mut child = cmd.spawn().map_err(|e| {
         AppError::msg(format!("failed to start rclone rcd ({}): {e}", binary.display()))

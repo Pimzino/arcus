@@ -11,7 +11,7 @@ use crate::settings::{self, Settings};
 use crate::AppState;
 use serde::Serialize;
 use serde_json::Value;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -424,11 +424,13 @@ pub fn local_roots(app: AppHandle) -> Vec<LocalRoot> {
             path: home.to_string_lossy().to_string(),
             kind: "home",
         });
-        for sub in ["Desktop", "Documents", "Downloads"] {
-            let dir = home.join(sub);
-            if dir.is_dir() {
+        // The platform's own folders: Linux's XDG user directories have translated names (Schreibtisch,
+        // Documents, Téléchargements…) and can be moved, so the names are not guessed from the home folder.
+        let path = app.path();
+        for dir in [path.desktop_dir(), path.document_dir(), path.download_dir()].into_iter().flatten() {
+            if dir.is_dir() && dir != home && !roots.iter().any(|r: &LocalRoot| Path::new(&r.path) == dir) {
                 roots.push(LocalRoot {
-                    name: sub.into(),
+                    name: dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
                     path: dir.to_string_lossy().to_string(),
                     kind: "folder",
                 });
@@ -460,22 +462,46 @@ pub fn local_roots(app: AppHandle) -> Vec<LocalRoot> {
         } else {
             &["/media", "/mnt", "/run/media"]
         };
-        for base in mount_dirs {
-            if let Ok(entries) = std::fs::read_dir(base) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir() {
-                        roots.push(LocalRoot {
-                            name: entry.file_name().to_string_lossy().to_string(),
-                            path: path.to_string_lossy().to_string(),
-                            kind: "volume",
-                        });
-                    }
-                }
-            }
+        let user = app
+            .path()
+            .home_dir()
+            .ok()
+            .and_then(|h| h.file_name().map(|n| n.to_string_lossy().to_string()))
+            .or_else(|| std::env::var("USER").ok());
+        for volume in volumes(mount_dirs.iter().map(Path::new), user.as_deref()) {
+            roots.push(LocalRoot {
+                name: volume.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+                path: volume.to_string_lossy().to_string(),
+                kind: "volume",
+            });
         }
     }
     roots
+}
+
+/// Mounted volumes under the given folders. Linux desktops mount removable drives one level deeper, in
+/// `/media/<user>/<drive>` or `/run/media/<user>/<drive>`, so a folder named after the user is looked into
+/// rather than listed as a drive of its own.
+#[cfg(not(windows))]
+fn volumes<'a>(bases: impl Iterator<Item = &'a Path>, user: Option<&str>) -> Vec<std::path::PathBuf> {
+    let subdirs = |dir: &Path| -> Vec<std::path::PathBuf> {
+        let mut dirs: Vec<_> = std::fs::read_dir(dir)
+            .map(|entries| entries.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect())
+            .unwrap_or_default();
+        dirs.sort();
+        dirs
+    };
+    let mut out = Vec::new();
+    for base in bases {
+        for dir in subdirs(base) {
+            if user.is_some() && dir.file_name().and_then(|n| n.to_str()) == user {
+                out.extend(subdirs(&dir));
+            } else {
+                out.push(dir);
+            }
+        }
+    }
+    out
 }
 
 #[derive(Serialize)]
@@ -563,4 +589,28 @@ pub fn mac_open_privacy_settings(pane: String) -> AppResult<()> {
     let url = crate::macos::privacy_pane_url(&pane)
         .ok_or_else(|| AppError::msg(format!("unknown privacy pane '{pane}'")))?;
     tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| AppError::msg(e.to_string()))
+}
+
+#[cfg(all(test, not(windows)))]
+mod tests {
+    use super::volumes;
+    use std::fs::create_dir_all;
+
+    #[test]
+    fn linux_drives_under_a_user_folder_are_listed_themselves() {
+        let root = std::env::temp_dir().join(format!("rclone-gui-volumes-{}", std::process::id()));
+        let media = root.join("media");
+        let mnt = root.join("mnt");
+        for dir in [media.join("sam/USB STICK"), media.join("sam/Backup"), media.join("cdrom"), mnt.join("nas")] {
+            create_dir_all(dir).unwrap();
+        }
+        let found = volumes([media.as_path(), mnt.as_path(), root.join("missing").as_path()].into_iter(), Some("sam"));
+        assert_eq!(
+            found,
+            vec![media.join("cdrom"), media.join("sam/Backup"), media.join("sam/USB STICK"), mnt.join("nas")]
+        );
+        // Without a user name nothing is looked into.
+        assert_eq!(volumes([media.as_path()].into_iter(), None), vec![media.join("cdrom"), media.join("sam")]);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 }

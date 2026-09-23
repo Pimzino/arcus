@@ -33,6 +33,14 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Linux: WebKitGTK's DMA-BUF renderer leaves the window blank on some GPU and driver combinations,
+    // NVIDIA under Wayland above all. Turning it off is the usual workaround and costs this UI nothing
+    // noticeable. Set before any thread starts; a value the user set themselves is left alone.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())

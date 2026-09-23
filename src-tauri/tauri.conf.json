@@ -46,6 +46,14 @@
     "macOS": {
       "minimumSystemVersion": "12.0"
     },
+    "linux": {
+      "deb": {
+        "recommends": ["fuse3", "xdg-utils"]
+      },
+      "rpm": {
+        "recommends": ["fuse3", "xdg-utils"]
+      }
+    },
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper"

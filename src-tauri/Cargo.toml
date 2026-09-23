@@ -41,6 +41,10 @@ uuid = { version = "1", features = ["v4"] }
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSURL", "NSError", "NSFileManager"] }
 
+# Linux: rclone child processes get PR_SET_PDEATHSIG, so they stop when the app dies (see daemon::spawn_rcd).
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
 codegen-units = 1
