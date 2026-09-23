@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Linked into the MSI through tauri.conf.json: bundle.windows.wix.fragmentPaths and componentRefs.
+
+  Up to v0.5.x the app was called "Rclone GUI". The MSI upgrades it in place (the pinned upgradeCode),
+  but Tauri's MSI does not remove shortcuts when a version is uninstalled as part of an upgrade, since
+  the new version normally puts a shortcut of the same name back. After the rename that would leave a
+  "Rclone GUI" shortcut pointing at a program that is gone, so these components delete the old Start
+  menu and desktop shortcuts, and the old Start menu folder, when Arcus is installed.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="ProgramMenuFolder">
+      <Directory Id="RcloneGuiProgramsFolder" Name="Rclone GUI" />
+    </DirectoryRef>
+
+    <DirectoryRef Id="RcloneGuiProgramsFolder">
+      <Component Id="RemoveRcloneGuiStartMenuShortcut" Guid="{C0F7906B-75B9-4270-B06C-5B9674E86B9E}">
+        <RemoveFile Id="RcloneGuiStartMenuShortcut" Name="Rclone GUI.lnk" On="install" />
+        <RemoveFolder Id="RcloneGuiProgramsFolder" On="install" />
+        <RegistryValue Root="HKCU" Key="Software\rclonegui\Arcus" Name="Rclone GUI Start Menu Shortcut Removed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="DesktopFolder">
+      <Component Id="RemoveRcloneGuiDesktopShortcut" Guid="{0ADF2D7F-AB6B-4E1C-A299-7989836805DD}">
+        <RemoveFile Id="RcloneGuiDesktopShortcut" Name="Rclone GUI.lnk" On="install" />
+        <RegistryValue Root="HKCU" Key="Software\rclonegui\Arcus" Name="Rclone GUI Desktop Shortcut Removed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

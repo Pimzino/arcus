@@ -51,7 +51,9 @@
         "type": "downloadBootstrapper"
       },
       "wix": {
-        "upgradeCode": "65d113d3-8a26-5f85-891c-1a74420c4412"
+        "upgradeCode": "65d113d3-8a26-5f85-891c-1a74420c4412",
+        "fragmentPaths": ["./windows/remove-rclone-gui-shortcuts.wxs"],
+        "componentRefs": ["RemoveRcloneGuiStartMenuShortcut", "RemoveRcloneGuiDesktopShortcut"]
       },
       "nsis": {
         "installerHooks": "./windows/installer-hooks.nsh"
