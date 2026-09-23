@@ -5,7 +5,7 @@
 //   2. The explorer opens a folder in each pane by typing its path.
 //   3. A file is selected and copied to the other pane: it arrives on disk, shows up in the other pane, and
 //      the transfer writes its log file.
-//   4. When the app is closed, no rclone it started is left running.
+//   4. When its window is closed, no rclone it started is left running.
 //
 // It runs in a throwaway HOME, so it never touches a real profile. Needs a display (xvfb-run in CI),
 // `tauri-driver` and `WebKitWebDriver` on PATH, and network access to rclone.org and GitHub.
@@ -190,12 +190,14 @@ try {
   log(`transfer log: ${transferLog}`);
   await screenshot("3-copied");
 
-  // 4. Closing the app leaves no rclone behind.
+  // 4. Closing the window, as a user quits, leaves no rclone behind. (Ending the WebDriver session instead
+  // would only kill the process it started, which for an AppImage is the launcher, not the app.)
   if (!rcloneProcesses().length) throw new Error("no rclone process was found while the app was running");
-  await wd("DELETE", `/session/${session}`);
+  await wd("DELETE", `/session/${session}/window`).catch((e) => log(`(closing the window: ${e.message})`));
+  await waitFor("every rclone the app started to exit", () => rcloneProcesses().length === 0, { timeout: 30_000 });
+  await wd("DELETE", `/session/${session}`).catch(() => undefined);
   session = undefined;
-  await waitFor("every rclone the app started to exit", () => rcloneProcesses().length === 0, { timeout: 20_000 });
-  log("app closed, no rclone left running");
+  log("window closed, no rclone left running");
   log("PASSED");
 } catch (e) {
   failed = true;
