@@ -1,13 +1,13 @@
 # Changelog
 
-Every release of Rclone GUI, newest first, with the commits it added since the release before it.
+Every release of Arcus, newest first, with the commits it added since the release before it.
 
 ## v0.5.1 (2026-09-21)
 
-- CI: Dependabot proposes updates for the pinned actions ([90624c6](https://github.com/Pimzino/rclone-gui/commit/90624c6ff580b11d2c1b33a55049e5f0a5602f3b))
-- Explorer: fix rows flickering during fast scrolling ([f75609d](https://github.com/Pimzino/rclone-gui/commit/f75609d3e69275bc4aefc71cf5cf75a0889b55b8))
+- CI: Dependabot proposes updates for the pinned actions ([90624c6](https://github.com/Pimzino/arcus/commit/90624c6ff580b11d2c1b33a55049e5f0a5602f3b))
+- Explorer: fix rows flickering during fast scrolling ([f75609d](https://github.com/Pimzino/arcus/commit/f75609d3e69275bc4aefc71cf5cf75a0889b55b8))
 
-All changes: [v0.5.0...v0.5.1](https://github.com/Pimzino/rclone-gui/compare/v0.5.0...v0.5.1)
+All changes: [v0.5.0...v0.5.1](https://github.com/Pimzino/arcus/compare/v0.5.0...v0.5.1)
 
 ## v0.5.0 (2026-09-20)
 

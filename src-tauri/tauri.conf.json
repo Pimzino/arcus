@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Rclone GUI",
+  "productName": "Arcus",
   "version": "0.5.1",
   "identifier": "com.rclonegui.desktop",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Rclone GUI",
+        "title": "Arcus",
         "width": 1280,
         "height": 840,
         "minWidth": 960,
@@ -37,11 +37,11 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
+      "../branding/icons/32x32.png",
+      "../branding/icons/128x128.png",
+      "../branding/icons/128x128@2x.png",
+      "../branding/icons/icon.icns",
+      "../branding/icons/icon.ico"
     ],
     "macOS": {
       "minimumSystemVersion": "12.0"

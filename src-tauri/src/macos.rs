@@ -8,7 +8,7 @@
 //! user asks for it; FUSE is detected from the files its installers leave behind.
 //!
 //! rclone runs as child processes of this app, so macOS attributes their file access to
-//! Rclone GUI: one grant covers the app and rclone alike.
+//! Arcus: one grant covers the app and rclone alike.
 
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -164,8 +164,8 @@ mod tests {
     #[test]
     fn bundle_is_found_from_its_executable() {
         assert_eq!(
-            bundle_from_exe(Path::new("/Applications/Rclone GUI.app/Contents/MacOS/rclone-gui")),
-            Some(PathBuf::from("/Applications/Rclone GUI.app"))
+            bundle_from_exe(Path::new("/Applications/Arcus.app/Contents/MacOS/rclone-gui")),
+            Some(PathBuf::from("/Applications/Arcus.app"))
         );
     }
 

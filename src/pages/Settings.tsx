@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   Download,
+  ExternalLink,
   FileCog,
   FolderOpen,
   Info,
@@ -24,6 +25,7 @@ import { useFileManager } from "../components/app/FileManager";
 import { LogViewerDialog } from "../components/app/LogViewer";
 import { MacPermissionsList } from "../components/app/MacPermissions";
 import { ProvisionProgress, useProvisionEvents } from "../components/app/Provision";
+import { BrandMark } from "../components/app/Brand";
 import {
   Button,
   Callout,
@@ -52,7 +54,7 @@ import {
   toast,
 } from "../components/ui";
 import { formatDateTime } from "../lib/format";
-import { pickFile } from "../lib/native";
+import { openExternal, pickFile } from "../lib/native";
 import { rc } from "../lib/rc";
 import { currentSection } from "../lib/scrollSpy";
 import { rememberSessionOptions } from "../lib/sessionOptions";
@@ -105,7 +107,7 @@ export function SettingsPage() {
                 <SectionCard
                   icon={<ShieldCheck />}
                   title="macOS permissions"
-                  description="What Rclone GUI needs from macOS, whether it has it, and where to grant it."
+                  description="What Arcus needs from macOS, whether it has it, and where to grant it."
                 >
                   <MacPermissionsList />
                 </SectionCard>
@@ -243,7 +245,7 @@ function SectionCard({
         <div className="min-w-0">
           <h2 className="flex items-center gap-3">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:size-4">{icon}</span>
-            <span className="text-xl font-semibold tracking-tight">{title}</span>
+            <span className="font-display text-xl font-semibold tracking-tight">{title}</span>
           </h2>
           {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
         </div>
@@ -826,7 +828,7 @@ function AppearanceCard() {
   const saveSettings = useAppStore((s) => s.saveSettings);
   const { run } = useAsyncAction();
   return (
-    <SectionCard icon={<Palette />} title="Appearance" description="How Rclone GUI looks on this computer.">
+    <SectionCard icon={<Palette />} title="Appearance" description="How Arcus looks on this computer.">
       <SettingRow title="Theme" description="Follow the system, or force light or dark.">
         <Segmented
           options={[
@@ -847,10 +849,11 @@ function AboutCard() {
   const fm = useFileManager();
   const version = useQuery({ queryKey: ["coreVersion"], enabled: useDaemonRunning(), queryFn: () => rc.version() });
   return (
-    <SectionCard icon={<Info />} title="About" description="This build of Rclone GUI and the rclone it is running." bodyClassName="flex flex-col gap-4">
+    <SectionCard icon={<Info />} title="About" description="This build of Arcus and the rclone it is running." bodyClassName="flex flex-col gap-4">
+      <RcloneCredit />
       <KeyValue
         items={[
-          { label: "Rclone GUI", value: info?.version ?? "–" },
+          { label: "Arcus", value: info?.version ?? "–" },
           { label: "Platform", value: info ? `${info.os} / ${info.arch}` : "–" },
           { label: "rclone", value: version.data ? `${version.data.version} · go ${version.data.goVersion} · ${version.data.goTags || "no tags"}` : "–" },
           {
@@ -885,5 +888,35 @@ function AboutCard() {
         <pre className="selectable overflow-x-auto rounded-lg bg-terminal p-3 font-mono text-xs text-terminal-fg">{JSON.stringify(version.data, null, 2)}</pre>
       )}
     </SectionCard>
+  );
+}
+
+/** Arcus is a front end: the work is rclone's, and this says so where people look for it. */
+function RcloneCredit() {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/40 p-4">
+      <BrandMark className="mt-1 h-[30px] w-10 shrink-0 text-foreground" />
+      <div className="flex min-w-0 flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-semibold">Arcus is powered by rclone</p>
+          <p className="text-sm text-muted-foreground">
+            Every listing, transfer, sync and mount is done by rclone, the official binary from rclone.org, which Arcus downloads and
+            verifies for you. rclone is created by Nick Craig-Wood and its contributors and is free software under the MIT licence.
+            Arcus is an independent project and is not affiliated with rclone.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" icon={<ExternalLink />} onClick={() => void openExternal("https://rclone.org")}>
+            rclone.org
+          </Button>
+          <Button size="sm" icon={<ExternalLink />} onClick={() => void openExternal("https://github.com/rclone/rclone")}>
+            rclone on GitHub
+          </Button>
+          <Button size="sm" variant="ghost" icon={<ExternalLink />} onClick={() => void openExternal("https://github.com/Pimzino/arcus")}>
+            Arcus source code
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

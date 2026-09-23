@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CHANGELOG_HEADER, VERSION_FILES, addSection, changelogSection, nextVersion, readVersion, recordedVersions, repoWebUrl, sectionFor, writeVersion } from "./release.mjs";
 
-const web = "https://github.com/Pimzino/rclone-gui";
+const web = "https://github.com/Pimzino/arcus";
 const sha = (prefix) => prefix.padEnd(40, "0");
 
 describe("nextVersion", () => {
@@ -26,14 +26,14 @@ describe("nextVersion", () => {
 
 describe("repoWebUrl", () => {
   it("reads GitHub remotes over HTTPS and SSH", () => {
-    expect(repoWebUrl("https://github.com/Pimzino/rclone-gui.git")).toBe(web);
-    expect(repoWebUrl("https://github.com/Pimzino/rclone-gui")).toBe(web);
-    expect(repoWebUrl("git@github.com:Pimzino/rclone-gui.git")).toBe(web);
-    expect(repoWebUrl("ssh://git@github.com/Pimzino/rclone-gui.git\n")).toBe(web);
+    expect(repoWebUrl("https://github.com/Pimzino/arcus.git")).toBe(web);
+    expect(repoWebUrl("https://github.com/Pimzino/arcus")).toBe(web);
+    expect(repoWebUrl("git@github.com:Pimzino/arcus.git")).toBe(web);
+    expect(repoWebUrl("ssh://git@github.com/Pimzino/arcus.git\n")).toBe(web);
   });
 
   it("is null for other hosts", () => {
-    expect(repoWebUrl("https://gitlab.com/Pimzino/rclone-gui.git")).toBeNull();
+    expect(repoWebUrl("https://gitlab.com/Pimzino/arcus.git")).toBeNull();
     expect(repoWebUrl("/tmp/origin.git")).toBeNull();
   });
 });
@@ -87,7 +87,7 @@ describe("CHANGELOG.md", () => {
 
 describe("version files", () => {
   const samples = {
-    "src-tauri/tauri.conf.json": '{\n  "productName": "Rclone GUI",\n  "version": "0.1.0",\n  "plugins": {\n    "x": {\n      "version": "9.9.9"\n    }\n  }\n}\n',
+    "src-tauri/tauri.conf.json": '{\n  "productName": "Arcus",\n  "version": "0.1.0",\n  "plugins": {\n    "x": {\n      "version": "9.9.9"\n    }\n  }\n}\n',
     "src-tauri/Cargo.toml": '[package]\nname = "rclone-gui"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\nserde = { version = "1" }\n',
     "src-tauri/Cargo.lock": '[[package]]\nname = "reqwest"\nversion = "0.13.5"\n\n[[package]]\nname = "rclone-gui"\nversion = "0.1.0"\n',
   };

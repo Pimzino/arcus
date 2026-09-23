@@ -5,6 +5,7 @@ import { isTauri } from "../../lib/tauri";
 import { selectMacPermissionsPending, useAppStore, type Page } from "../../store/app";
 import { selectRunningCount, useJobsStore } from "../../store/jobs";
 import { Badge, Kbd, cn, type Tone } from "../ui";
+import { BrandLockup } from "./Brand";
 
 export const NAV: { page: Page; label: string; icon: ReactNode; shortcut: string }[] = [
   { page: "explorer", label: "Explorer", icon: <FolderOpen />, shortcut: "1" },
@@ -69,12 +70,7 @@ export function Sidebar() {
 }
 
 function Brand() {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-primary text-[11px] font-bold text-primary-foreground">rc</span>
-      <span className="text-sm font-semibold tracking-tight">Rclone GUI</span>
-    </div>
-  );
+  return <BrandLockup className="h-[18px] w-auto shrink-0 text-foreground" />;
 }
 
 function SectionLabel({ children }: { children: ReactNode }) {

@@ -65,7 +65,7 @@ export function SetupPage() {
 
   return (
     <>
-      <PageHeader title="Setup" description="Rclone GUI runs the official rclone engine, which it downloads and verifies itself." />
+      <PageHeader title="Setup" description="Arcus runs the official rclone engine, which it downloads and verifies itself." />
       <PageBody>
         <div className="mx-auto flex w-full max-w-xl flex-col gap-6">
           {daemon.state === "running" && (

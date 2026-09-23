@@ -310,7 +310,7 @@ impl TransferDaemons {
         }
         if let (Some(path), Some(summary)) = (&entry.info.log_path, summary.filter(|s| !s.trim().is_empty())) {
             let mut file = tokio::fs::OpenOptions::new().append(true).create(true).open(path).await?;
-            file.write_all(format!("\n===== Rclone GUI summary =====\n{}\n", summary.trim_end()).as_bytes())
+            file.write_all(format!("\n===== Arcus summary =====\n{}\n", summary.trim_end()).as_bytes())
                 .await?;
         }
         let activity = entry.activity.lock().unwrap().totals(id);
@@ -615,7 +615,7 @@ mod live_tests {
         // local to local is a "server-side copy"
         assert!(log.lines().any(|l| l.contains(" INFO  : a.txt: Copied (")), "readable text, not JSON");
         assert!(!log.contains("{\"time\""));
-        assert!(log.contains("Rclone GUI summary"));
+        assert!(log.contains("Arcus summary"));
         assert!(log.trim_end().ends_with("Result: success"));
 
         // a transfer without a log file still reports what it does

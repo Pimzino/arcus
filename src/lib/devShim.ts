@@ -349,7 +349,7 @@ export async function invoke(cmd: string, args: Record<string, unknown>): Promis
             ]
           : null,
         fuse: [],
-        appPath: "/Applications/Rclone GUI.app",
+        appPath: "/Applications/Arcus.app",
       };
     }
     case "mac_open_privacy_settings":

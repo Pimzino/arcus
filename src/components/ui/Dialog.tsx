@@ -118,7 +118,7 @@ export function Dialog({
       >
         <header className="flex items-start gap-4 px-6 pt-6 pb-4">
           <div className="grid min-w-0 flex-1 gap-1">
-            <h2 className="text-lg leading-none font-semibold">{title}</h2>
+            <h2 className="font-display text-lg leading-none font-semibold">{title}</h2>
             {description && <p className="text-sm text-muted-foreground">{description}</p>}
           </div>
           <IconButton label="Close" size="sm" onClick={onClose} className="-mr-2 -mt-1">

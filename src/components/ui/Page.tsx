@@ -20,7 +20,7 @@ export function PageHeader({
     <header {...dragRegion()} className={cn("shrink-0 border-b px-6 py-4", className)}>
       <div className="flex items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">{title}</h1>
           {description && <p className="mt-1 text-base text-muted-foreground">{description}</p>}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-4">{actions}</div>}

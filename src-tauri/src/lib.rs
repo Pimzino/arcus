@@ -1,4 +1,4 @@
-//! Rclone GUI: a cross-platform desktop front end for rclone.
+//! Arcus: a cross-platform desktop front end for rclone.
 //!
 //! The Rust side is deliberately small: it provisions a verified rclone binary,
 //! supervises `rclone rcd` (one for the UI, one per transfer), and proxies the

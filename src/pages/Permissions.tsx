@@ -8,7 +8,7 @@ export function PermissionsPage() {
   const markReviewed = useAppStore((s) => s.markMacPermissionsReviewed);
   return (
     <>
-      <PageHeader title="Permissions" description="macOS protects some folders and features. Set up the ones Rclone GUI uses now, or come back to this later." />
+      <PageHeader title="Permissions" description="macOS protects some folders and features. Set up the ones Arcus uses now, or come back to this later." />
       <PageBody>
         <div className="mx-auto flex max-w-2xl flex-col gap-6">
           <Card>

@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Made by branding/build.py: Sora SemiBold (SIL Open Font License, branding/fonts/OFL.txt), Latin subset. */
+@font-face {
+  font-family: "Sora";
+  src: url("../branding/fonts/Sora-SemiBold-latin.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+
 /* Dark mode is driven by data-theme on <html> (resolved from the user's setting). */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
@@ -14,6 +23,9 @@
 @theme {
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial,
     sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  /* Sora, the wordmark's typeface, for the large headings only (page, section and dialog titles); all other
+     text stays in the system font, which reads better small and keeps the app native on each platform. */
+  --font-display: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);

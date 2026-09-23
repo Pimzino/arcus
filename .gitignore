@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 .claude/
 *.tsbuildinfo
+
+# Python venv for branding/build.py
+.venv-brand/

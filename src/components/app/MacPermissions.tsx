@@ -70,7 +70,7 @@ export function MacPermissionsList() {
           </Button>
         }
       >
-        rclone runs inside this app, so a permission granted to Rclone GUI covers rclone too.
+        rclone runs inside this app, so a permission granted to Arcus covers rclone too.
       </Callout>
       {status.error && <ErrorMessage error={status.error} />}
 
@@ -87,7 +87,7 @@ export function MacPermissionsList() {
             fda !== "granted" && (
               <ol className="list-decimal space-y-0.5 pl-4 text-sm text-muted-foreground">
                 <li>Open System Settings → Privacy &amp; Security → Full Disk Access.</li>
-                <li>Click + and choose Rclone GUI, or drag the app in from Finder.</li>
+                <li>Click + and choose Arcus, or drag the app in from Finder.</li>
                 <li>Turn its switch on, then come back here. Quit and reopen the app if rclone still cannot read a folder.</li>
               </ol>
             )

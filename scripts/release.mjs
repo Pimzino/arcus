@@ -6,7 +6,7 @@
 // On an up-to-date main with nothing uncommitted, this sets the new version in every file that records
 // it, adds a section to CHANGELOG.md listing each commit since the previous release with its commit ID,
 // commits that as "Release vX.Y.Z", tags the commit and pushes the commit and the tag together. The
-// tag's CI run (.github/workflows/build.yml) builds the bundles and publishes them as a GitHub release
+// tag's CI run (.github/workflows/release.yml) builds the bundles and publishes them as a GitHub release
 // whose notes come from `node scripts/release.mjs notes vX.Y.Z`, which fails when the tag and the
 // version in the files disagree.
 
@@ -17,7 +17,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-export const CHANGELOG_HEADER = "# Changelog\n\nEvery release of Rclone GUI, newest first, with the commits it added since the release before it.\n";
+export const CHANGELOG_HEADER = "# Changelog\n\nEvery release of Arcus, newest first, with the commits it added since the release before it.\n";
 
 /** Subjects of release commits, which the changelog leaves out. */
 const RELEASE_SUBJECT = /^Release v\d+\.\d+\.\d+$/;
@@ -180,7 +180,7 @@ function release(bump, { dryRun, trailers }) {
 
   git("add", "package.json", "package-lock.json", ...Object.keys(VERSION_FILES), "CHANGELOG.md");
   git("commit", "--quiet", "-m", `Release ${tag}`, ...trailers.flatMap((trailer) => ["--trailer", trailer]));
-  git("tag", "--annotate", tag, "-m", `Rclone GUI ${tag}`);
+  git("tag", "--annotate", tag, "-m", `Arcus ${tag}`);
   try {
     git("push", "--atomic", "--quiet", "origin", "main", `refs/tags/${tag}`);
   } catch (e) {
