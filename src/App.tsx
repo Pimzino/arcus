@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from "react";
+import { LegacyAppNotice } from "./components/app/LegacyApp";
 import { Sidebar } from "./components/app/Sidebar";
 import { StatusBar } from "./components/app/StatusBar";
 import { Button, EmptyState, ErrorMessage, Spinner, ToastViewport } from "./components/ui";
@@ -120,6 +121,7 @@ export default function App() {
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">{renderPage(page)}</main>
       </div>
       <StatusBar />
+      <LegacyAppNotice />
       <ToastViewport />
     </div>
   );

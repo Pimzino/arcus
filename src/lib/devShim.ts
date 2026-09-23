@@ -311,6 +311,12 @@ export async function invoke(cmd: string, args: Record<string, unknown>): Promis
       return [];
     case "log_tail":
       return `(log preview is not available in the browser shim: ${args.path})`;
+    case "legacy_app_installs":
+      // Pretend the pre-rename app is still in Applications until it is "moved to the Trash".
+      return loadJson("legacyAppTrashed", false) ? [] : ["/Applications/Rclone GUI.app"];
+    case "trash_legacy_app":
+      saveJson("legacyAppTrashed", true);
+      return null;
     case "store_get":
       return loadJson(`store:${args.key}`, null);
     case "store_set":

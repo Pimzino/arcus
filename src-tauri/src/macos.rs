@@ -124,10 +124,15 @@ pub fn fuse_installs() -> Vec<FuseInstall> {
         .collect()
 }
 
-/// `CFBundleShortVersionString` of an Info.plist, read with plutil so binary plists work too.
+/// `CFBundleShortVersionString` of an Info.plist.
 fn bundle_version(plist: &Path) -> Option<String> {
+    plist_string(plist, "CFBundleShortVersionString")
+}
+
+/// A string value of an Info.plist, read with plutil so binary plists work too.
+fn plist_string(plist: &Path, key: &str) -> Option<String> {
     let out = std::process::Command::new("/usr/bin/plutil")
-        .args(["-extract", "CFBundleShortVersionString", "raw", "-o", "-"])
+        .args(["-extract", key, "raw", "-o", "-"])
         .arg(plist)
         .output()
         .ok()?;
@@ -142,6 +147,46 @@ fn bundle_version(plist: &Path) -> Option<String> {
 pub fn bundle_from_exe(exe: &Path) -> Option<PathBuf> {
     let bundle = exe.parent()?.parent()?.parent()?;
     (bundle.extension().and_then(|e| e.to_str()) == Some("app")).then(|| bundle.to_path_buf())
+}
+
+/// Names the app had before it was renamed Arcus (up to v0.5.x it was "Rclone GUI").
+const LEGACY_BUNDLE_NAMES: &[&str] = &["Rclone GUI.app"];
+
+/// Copies of this app from before the rename that are still in an Applications folder. The identifier did
+/// not change, so settings, rclone binaries and job history carried over, but dragging Arcus.app into
+/// Applications leaves the old bundle next to it. A copy counts when it has an old name, this app's bundle
+/// identifier, and is not the bundle that is running.
+pub fn legacy_installs(home: &Path, identifier: &str) -> Vec<PathBuf> {
+    legacy_installs_in(&[PathBuf::from("/Applications"), home.join("Applications")], identifier)
+}
+
+fn legacy_installs_in(dirs: &[PathBuf], identifier: &str) -> Vec<PathBuf> {
+    let running = std::env::current_exe()
+        .ok()
+        .and_then(|exe| bundle_from_exe(&exe))
+        .and_then(|b| b.canonicalize().ok());
+    dirs.iter()
+        .flat_map(|dir| LEGACY_BUNDLE_NAMES.iter().map(move |name| dir.join(name)))
+        .filter(|bundle| {
+            plist_string(&bundle.join("Contents/Info.plist"), "CFBundleIdentifier").as_deref() == Some(identifier)
+        })
+        .filter(|bundle| running.is_none() || bundle.canonicalize().ok() != running)
+        .collect()
+}
+
+/// Move `path` to the Bin, where the user can put it back from.
+#[cfg(target_os = "macos")]
+pub fn move_to_trash(path: &Path) -> Result<(), String> {
+    use objc2_foundation::{NSFileManager, NSString, NSURL};
+    let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
+    NSFileManager::defaultManager()
+        .trashItemAtURL_resultingItemURL_error(&url, None)
+        .map_err(|e| e.localizedDescription().to_string())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn move_to_trash(_path: &Path) -> Result<(), String> {
+    Err("moving to the Bin is only done on macOS".into())
 }
 
 /// Deep link into System Settings → Privacy & Security for a pane the guide refers to.
@@ -173,6 +218,28 @@ mod tests {
     fn bare_binaries_have_no_bundle() {
         assert_eq!(bundle_from_exe(Path::new("/tmp/target/debug/rclone-gui")), None);
         assert_eq!(bundle_from_exe(Path::new("rclone-gui")), None);
+    }
+
+    #[test]
+    fn legacy_installs_need_the_old_name_and_this_identifier() {
+        let home = std::env::temp_dir().join(format!("rclone-gui-legacy-{}", std::process::id()));
+        let apps = home.join("Applications");
+        let plist = |bundle: &str, id: &str| {
+            let contents = apps.join(bundle).join("Contents");
+            std::fs::create_dir_all(&contents).unwrap();
+            let body = format!(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict>\
+                 <key>CFBundleIdentifier</key><string>{id}</string></dict></plist>"
+            );
+            std::fs::write(contents.join("Info.plist"), body).unwrap();
+        };
+        plist("Rclone GUI.app", "com.rclonegui.desktop");
+        plist("Arcus.app", "com.rclonegui.desktop");
+        let dirs = [apps.clone()];
+        assert_eq!(legacy_installs_in(&dirs, "com.rclonegui.desktop"), vec![apps.join("Rclone GUI.app")]);
+        // Someone else's app that happens to have the old name is left alone.
+        assert!(legacy_installs_in(&dirs, "com.example.other").is_empty());
+        std::fs::remove_dir_all(&home).unwrap();
     }
 
     #[test]

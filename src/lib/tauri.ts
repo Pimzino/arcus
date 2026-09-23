@@ -97,4 +97,8 @@ export const api = {
   /** macOS permissions guide. `probeFolders` lists the protected folders, which makes macOS prompt the first time. */
   macPermissions: (probeFolders: boolean) => invoke<MacPermissions>("mac_permissions", { probeFolders }),
   macOpenPrivacySettings: (pane: MacPrivacyPane) => invoke<void>("mac_open_privacy_settings", { pane }),
+  /** macOS: copies of the app from before it was renamed Arcus ("Rclone GUI.app") still in Applications. */
+  legacyAppInstalls: () => invoke<string[]>("legacy_app_installs"),
+  /** Move one of those copies to the Trash; the backend accepts nothing else. */
+  trashLegacyApp: (path: string) => invoke<void>("trash_legacy_app", { path }),
 };

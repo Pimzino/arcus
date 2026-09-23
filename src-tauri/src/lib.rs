@@ -118,6 +118,8 @@ pub fn run() {
             commands::show_in_file_manager,
             commands::mac_permissions,
             commands::mac_open_privacy_settings,
+            commands::legacy_app_installs,
+            commands::trash_legacy_app,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

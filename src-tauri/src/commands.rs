@@ -523,6 +523,37 @@ pub async fn mac_permissions(app: AppHandle, probe_folders: bool) -> AppResult<c
         .map_err(|e| AppError::msg(format!("permission check failed: {e}")))
 }
 
+/// Copies of the app from before it was renamed Arcus, still in an Applications folder (macOS).
+#[tauri::command]
+pub async fn legacy_app_installs(app: AppHandle) -> AppResult<Vec<String>> {
+    if !cfg!(target_os = "macos") {
+        return Ok(Vec::new());
+    }
+    let home = app.path().home_dir()?;
+    let identifier = app.config().identifier.clone();
+    let found = tokio::task::spawn_blocking(move || crate::macos::legacy_installs(&home, &identifier))
+        .await
+        .map_err(|e| AppError::msg(format!("looking for the old app failed: {e}")))?;
+    Ok(found.iter().map(|p| p.to_string_lossy().to_string()).collect())
+}
+
+/// Move a pre-rename copy of the app to the Bin. Only a path that `legacy_app_installs` finds is accepted,
+/// so the page cannot ask for anything else to be moved.
+#[tauri::command]
+pub async fn trash_legacy_app(app: AppHandle, path: String) -> AppResult<()> {
+    let home = app.path().home_dir()?;
+    let identifier = app.config().identifier.clone();
+    tokio::task::spawn_blocking(move || {
+        let wanted = std::path::PathBuf::from(&path);
+        if !crate::macos::legacy_installs(&home, &identifier).contains(&wanted) {
+            return Err(AppError::msg(format!("{path} is not an old copy of this app")));
+        }
+        crate::macos::move_to_trash(&wanted).map_err(AppError::msg)
+    })
+    .await
+    .map_err(|e| AppError::msg(format!("moving the old app failed: {e}")))?
+}
+
 /// Open System Settings → Privacy & Security at one of the panes the guide refers to.
 #[tauri::command]
 pub fn mac_open_privacy_settings(pane: String) -> AppResult<()> {

@@ -1,0 +1,92 @@
+name: Windows upgrade check
+
+# Proves on a real Windows machine that installing this commit over an older published release upgrades it:
+# the old install goes, the new one is there, and the user's data (under the bundle identifier) survives.
+# It exists for the rename from "Rclone GUI" to Arcus, which changed the product name the installers key an
+# install on (see src-tauri/windows/installer-hooks.nsh and bundle.windows.wix.upgradeCode), and is worth
+# running again whenever the installer settings change. Run it from the Actions tab.
+
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: Release to upgrade from
+        default: v0.5.1
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    name: Upgrade from ${{ inputs.from }} (${{ matrix.installer }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        installer: [nsis, msi]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: Build this commit's installer as a newer version
+        shell: bash
+        # A version above any release, so the MSI treats the install as an upgrade, as a real release would.
+        run: npm run tauri build -- --bundles ${{ matrix.installer }} --config '{"version":"99.0.0"}'
+      - name: Download the old installer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pattern=$([ "${{ matrix.installer }}" = nsis ] && echo "*setup.exe" || echo "*.msi")
+          gh release download "${{ inputs.from }}" --repo "${{ github.repository }}" --pattern "$pattern" --dir old
+          ls old
+      - name: Install the old version, add user data, upgrade, check
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Check($ok, $what) { if (-not $ok) { throw "FAILED: $what" } ; Write-Host "ok: $what" }
+          function Installed($name) {
+            $keys = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                    'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+            @(Get-ItemProperty $keys -ErrorAction SilentlyContinue | Where-Object DisplayName -eq $name)
+          }
+          function Run($file) {
+            if ($file.EndsWith('.msi')) { $p = Start-Process msiexec -ArgumentList '/i', "`"$file`"", '/qn', '/norestart' -Wait -PassThru }
+            else { $p = Start-Process $file -ArgumentList '/S' -Wait -PassThru }
+            Check ($p.ExitCode -eq 0) "$([IO.Path]::GetFileName($file)) exited with 0 (got $($p.ExitCode))"
+          }
+
+          $old = (Get-ChildItem old -File | Select-Object -First 1).FullName
+          $ext = if ('${{ matrix.installer }}' -eq 'msi') { '*.msi' } else { '*setup.exe' }
+          $new = (Get-ChildItem "src-tauri/target/release/bundle/${{ matrix.installer }}" -Filter $ext | Select-Object -First 1).FullName
+
+          Run $old
+          Check ((Installed 'Rclone GUI').Count -eq 1) 'the old version is installed'
+
+          # What a user has by now: settings, a downloaded rclone, logs. All under the bundle identifier.
+          $data = Join-Path $env:APPDATA 'com.rclonegui.desktop'
+          $logs = Join-Path $env:LOCALAPPDATA 'com.rclonegui.desktop\logs'
+          New-Item -ItemType Directory -Force "$data\bin\v1.0.0", $logs | Out-Null
+          Set-Content "$data\settings.json" '{"settingsVersion":2}'
+          Set-Content "$data\bin\v1.0.0\rclone.exe" 'placeholder'
+          Set-Content "$logs\rclone-gui.log" 'old log'
+
+          Run $new
+          Check ((Installed 'Rclone GUI').Count -eq 0) 'the old version is no longer installed'
+          $arcus = Installed 'Arcus'
+          Check ($arcus.Count -eq 1) 'Arcus is installed, once'
+          Check ($arcus[0].DisplayVersion -eq '99.0.0') "Arcus is the new version (got $($arcus[0].DisplayVersion))"
+          foreach ($f in "$data\settings.json", "$data\bin\v1.0.0\rclone.exe", "$logs\rclone-gui.log") {
+            Check (Test-Path $f) "user data kept: $f"
+          }
+          $menu = @("$env:APPDATA\Microsoft\Windows\Start Menu\Programs", "$env:ProgramData\Microsoft\Windows\Start Menu\Programs")
+          Check (-not (Get-ChildItem $menu -Recurse -Filter 'Rclone GUI.lnk' -ErrorAction SilentlyContinue)) 'no Rclone GUI shortcut left in the Start menu'
+          Check (Get-ChildItem $menu -Recurse -Filter 'Arcus.lnk' -ErrorAction SilentlyContinue) 'an Arcus shortcut in the Start menu'

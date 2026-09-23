@@ -49,6 +49,12 @@
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
+      },
+      "wix": {
+        "upgradeCode": "65d113d3-8a26-5f85-891c-1a74420c4412"
+      },
+      "nsis": {
+        "installerHooks": "./windows/installer-hooks.nsh"
       }
     }
   }

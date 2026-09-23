@@ -36,9 +36,10 @@ uuid = { version = "1", features = ["v4"] }
 
 # Asking the workspace whether a folder is a package (an `.app` bundle and friends), so
 # that "show in Finder" never launches one. Same crates and features the opener plugin uses.
+# NSFileManager moves the pre-rename "Rclone GUI.app" to the Bin (see macos::legacy_installs).
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSURL", "NSError", "NSFileManager"] }
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
