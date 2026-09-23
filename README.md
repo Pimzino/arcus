@@ -15,7 +15,7 @@
   <a href="https://github.com/Pimzino/arcus/actions/workflows/ci.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/Pimzino/arcus/ci.yml?branch=main&label=tests"></a>
   <a href="https://github.com/Pimzino/arcus/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Pimzino/arcus?label=release&color=1447e6"></a>
   <a href="https://github.com/Pimzino/arcus/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/Pimzino/arcus/total?color=1447e6"></a>
-  <img alt="macOS, Windows and Linux (beta)" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux%20(beta)-0a0f1d">
+  <img alt="macOS, Windows and Linux" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-0a0f1d">
   <a href="LICENSE"><img alt="Licence: GPL-3.0" src="https://img.shields.io/github/license/Pimzino/arcus?color=0a0f1d"></a>
   <a href="https://rclone.org"><img alt="Powered by rclone" src="https://img.shields.io/badge/powered%20by-rclone-3c8cff"></a>
 </p>
@@ -36,9 +36,9 @@ Get the latest version from the [releases page](https://github.com/Pimzino/arcus
 | macOS, Apple Silicon | `Arcus_<version>_aarch64.dmg` |
 | macOS, Intel | `Arcus_<version>_x64.dmg` |
 | Windows 10/11 | `Arcus_<version>_x64-setup.exe` (or the `.msi`) |
-| Linux x64, any distribution (beta) | `Arcus_<version>_amd64.AppImage` |
-| Debian, Ubuntu and derivatives (beta) | `Arcus_<version>_amd64.deb` |
-| Fedora, openSUSE and derivatives (beta) | `Arcus-<version>-1.x86_64.rpm` |
+| Linux x64, any distribution | `Arcus_<version>_amd64.AppImage` |
+| Debian, Ubuntu and derivatives | `Arcus_<version>_amd64.deb` |
+| Fedora, openSUSE and derivatives | `Arcus-<version>-1.x86_64.rpm` |
 
 The builds are not code-signed yet, so the system warns the first time:
 
@@ -46,10 +46,9 @@ The builds are not code-signed yet, so the system warns the first time:
   says the app is damaged, run `xattr -dr com.apple.quarantine /Applications/Arcus.app` and open it again.
 * **Windows:** SmartScreen shows *Windows protected your PC*; click *More info*, then *Run anyway*.
 
-**Linux is in beta**, with builds published from the release after v0.5.1. Every Linux release is tested
-end to end before it is published (the AppImage is started on Ubuntu 22.04, installs and verifies rclone,
-and copies a file), but it has seen little real-world use yet, so please
-[report anything that doesn't work](https://github.com/Pimzino/arcus/issues). Make the AppImage executable
+**Linux** builds are published from v0.6.0 on. Every Linux release is tested end to end before it is
+published (the AppImage is started on Ubuntu 22.04, installs and verifies rclone and copies a file), but
+they are new, so please [report anything that doesn't work](https://github.com/Pimzino/arcus/issues). Make the AppImage executable
 (`chmod +x Arcus_*.AppImage`) before running it; on Ubuntu 24.04 and later it also needs `libfuse2t64`.
 
 On first launch Arcus downloads rclone and checks its signature, which takes a few seconds. Mounting a remote

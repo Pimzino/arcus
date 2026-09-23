@@ -376,7 +376,7 @@ def write_web_font() -> None:
 
 
 def write_platform_icons() -> None:
-    """Every size macOS and Windows need, from app-icon.png, into icons/. `tauri icon` also makes Android and iOS
+    """Every size macOS, Windows and Linux need, from app-icon.png, into icons/. `tauri icon` also makes Android and iOS
     sets and a 64 px PNG; this app ships neither, so they go."""
     out = HERE / "icons"
     run = subprocess.run(["npx", "tauri", "icon", str(HERE / "app-icon.png"), "--output", str(out)], cwd=REPO,
