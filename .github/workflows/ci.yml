@@ -1,7 +1,8 @@
 name: CI
 
 # Every push to main and every pull request: the TypeScript type check, the UI's unit tests (vitest) and the
-# Rust tests. release.yml runs this same workflow before it builds anything.
+# Rust tests, and an end-to-end run of the real app on Linux (e2e/linux.mjs). release.yml runs this same
+# workflow before it builds anything.
 
 on:
   push:
@@ -40,5 +41,40 @@ jobs:
       - name: Linux webkit deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf
       - run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  linux-e2e:
+    name: Linux end-to-end
+    # The oldest Ubuntu the Linux release is built on (release.yml), so this runs what users run.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: src-tauri
+      - name: Linux webkit deps, WebKitWebDriver and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf webkit2gtk-driver xvfb
+      - name: tauri-driver
+        run: cargo install tauri-driver --locked
+      - run: npm ci
+      - name: Build the app
+        run: npm run tauri build -- --no-bundle
+      - name: Use the app like a first-time user
+        run: xvfb-run -a node e2e/linux.mjs
+        env:
+          ARCUS_BIN: src-tauri/target/release/rclone-gui
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-e2e-screenshots
+          path: e2e/artifacts/
+          if-no-files-found: ignore

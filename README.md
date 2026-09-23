@@ -15,7 +15,7 @@
   <a href="https://github.com/Pimzino/arcus/actions/workflows/ci.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/Pimzino/arcus/ci.yml?branch=main&label=tests"></a>
   <a href="https://github.com/Pimzino/arcus/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Pimzino/arcus?label=release&color=1447e6"></a>
   <a href="https://github.com/Pimzino/arcus/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/Pimzino/arcus/total?color=1447e6"></a>
-  <img alt="macOS and Windows" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows-0a0f1d">
+  <img alt="macOS, Windows and Linux (beta)" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux%20(beta)-0a0f1d">
   <a href="LICENSE"><img alt="Licence: GPL-3.0" src="https://img.shields.io/github/license/Pimzino/arcus?color=0a0f1d"></a>
   <a href="https://rclone.org"><img alt="Powered by rclone" src="https://img.shields.io/badge/powered%20by-rclone-3c8cff"></a>
 </p>
@@ -36,6 +36,9 @@ Get the latest version from the [releases page](https://github.com/Pimzino/arcus
 | macOS, Apple Silicon | `Arcus_<version>_aarch64.dmg` |
 | macOS, Intel | `Arcus_<version>_x64.dmg` |
 | Windows 10/11 | `Arcus_<version>_x64-setup.exe` (or the `.msi`) |
+| Linux x64, any distribution (beta) | `Arcus_<version>_amd64.AppImage` |
+| Debian, Ubuntu and derivatives (beta) | `Arcus_<version>_amd64.deb` |
+| Fedora, openSUSE and derivatives (beta) | `Arcus-<version>-1.x86_64.rpm` |
 
 The builds are not code-signed yet, so the system warns the first time:
 
@@ -43,9 +46,15 @@ The builds are not code-signed yet, so the system warns the first time:
   says the app is damaged, run `xattr -dr com.apple.quarantine /Applications/Arcus.app` and open it again.
 * **Windows:** SmartScreen shows *Windows protected your PC*; click *More info*, then *Run anyway*.
 
+**Linux is in beta**, with builds published from the release after v0.5.1. Every Linux release is tested
+end to end before it is published (the AppImage is started on Ubuntu 22.04, installs and verifies rclone,
+and copies a file), but it has seen little real-world use yet, so please
+[report anything that doesn't work](https://github.com/Pimzino/arcus/issues). Make the AppImage executable
+(`chmod +x Arcus_*.AppImage`) before running it; on Ubuntu 24.04 and later it also needs `libfuse2t64`.
+
 On first launch Arcus downloads rclone and checks its signature, which takes a few seconds. Mounting a remote
 as a drive also needs [macFUSE](https://macfuse.github.io/) or [FUSE-T](https://www.fuse-t.org/) on macOS, or
-[WinFsp](https://winfsp.dev/) on Windows.
+[WinFsp](https://winfsp.dev/) on Windows, or `fuse3` on Linux.
 
 ### Upgrading from Rclone GUI
 
@@ -74,7 +83,7 @@ Your rclone config is rclone's own file and is not touched either.
   after 30 days by default.
 * **Mounts** with VFS cache settings.
 * **Console:** run any rclone command with streamed output, or call any rc method with JSON parameters.
-* **Show in Finder / File Explorer** for anything on this computer the app shows. Files are revealed in their
+* **Show in Finder, File Explorer or your Linux file manager** for anything on this computer the app shows. Files are revealed in their
   folder, never launched.
 * **macOS permissions guide** for Full Disk Access, the protected folders, FUSE and the local network.
 * **Verified rclone:** the official binary, checked against rclone's PGP-signed checksums and kept private to
@@ -167,7 +176,8 @@ dense tables and keeps the app native on each platform.
 
 Prerequisites: Node 20+, Rust stable, and the platform toolchain Tauri needs
 (macOS: Xcode command line tools; Windows: Visual Studio Build Tools with the C++ workload
-and WebView2, which is preinstalled on Windows 10/11). See
+and WebView2, which is preinstalled on Windows 10/11; Linux: `libwebkit2gtk-4.1-dev` and
+`librsvg2-dev`, see the CI workflow). See
 <https://tauri.app/start/prerequisites/>.
 
 ```bash
@@ -246,27 +256,34 @@ src-tauri/src/
 src-tauri/keys/           rclone release signing keys (verbatim copy of rclone.org/KEYS)
 src-tauri/windows/        NSIS installer hooks (replacing a pre-rename Rclone GUI install)
 scripts/release.mjs       cuts a release: version bump, CHANGELOG.md section, tag (see Releases)
+e2e/linux.mjs             end-to-end test of the real app on Linux, under tauri-driver (see CI)
 branding/                 logo, icons, fonts and the script that draws them (see Design and brand)
 .github/workflows/        ci.yml (tests), release.yml (bundles for a tag), windows-upgrade.yml
 ```
 
 ### Where data lives
 
-| | macOS | Windows |
-| --- | --- | --- |
-| rclone binaries, settings, job history | `~/Library/Application Support/com.rclonegui.desktop/` | `%APPDATA%\com.rclonegui.desktop\` |
-| app + daemon logs | `~/Library/Logs/com.rclonegui.desktop/` | `%LOCALAPPDATA%\com.rclonegui.desktop\logs\` |
-| rclone config | rclone's default (`rclone config file`) unless overridden in Settings | same |
+| | macOS | Windows | Linux |
+| --- | --- | --- | --- |
+| rclone binaries, settings, job history | `~/Library/Application Support/com.rclonegui.desktop/` | `%APPDATA%\com.rclonegui.desktop\` | `~/.local/share/com.rclonegui.desktop/` |
+| app + daemon logs | `~/Library/Logs/com.rclonegui.desktop/` | `%LOCALAPPDATA%\com.rclonegui.desktop\logs\` | `~/.local/share/com.rclonegui.desktop/logs/` |
+| rclone config | rclone's default (`rclone config file`) unless overridden in Settings | same | same |
 
 ## Continuous integration and releases
 
 Three workflows in `.github/workflows/`:
 
 * **`ci.yml`** runs on every push to `main` and every pull request: the TypeScript type check, the UI's unit
-  tests (`npm test`) and the Rust tests. The *tests* badge above is its latest result on `main`.
+  tests (`npm test`) and the Rust tests, and **Linux end-to-end** ([`e2e/linux.mjs`](e2e/linux.mjs)), which
+  builds the app, starts it on a virtual display under `tauri-driver` and uses it like a first-time user:
+  it installs and verifies rclone from the Setup page, opens a folder in each explorer pane, copies a file
+  across and checks that it arrived, that the transfer wrote its log and that closing the app leaves no
+  rclone running. Screenshots of each step are kept with the run. The *tests* badge above is the latest
+  result on `main`.
 * **`release.yml`** runs for a version tag: `ci.yml` first, then it drafts a GitHub release whose notes are
-  that version's changelog section, builds the macOS (Apple Silicon and Intel) and Windows bundles, attaches
-  the `.dmg`, `.msi` and setup `.exe` files and publishes the release. If a bundle fails to build, the release
+  that version's changelog section, builds the macOS (Apple Silicon and Intel), Windows and Linux bundles,
+  runs the end-to-end test again on the AppImage itself, attaches the `.dmg`, `.msi`, setup `.exe`,
+  `.AppImage`, `.deb` and `.rpm` files and publishes the release. If a bundle fails to build, the release
   stays a draft, and re-running the failed jobs finishes it. It refuses a tag that doesn't match the version
   recorded in the files.
 * **`windows-upgrade.yml`**, run by hand from the Actions tab, installs a published release on a Windows

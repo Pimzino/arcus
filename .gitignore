@@ -27,3 +27,6 @@ dist-ssr
 
 # Python venv for branding/build.py
 .venv-brand/
+
+# Screenshots from e2e/linux.mjs
+e2e/artifacts/
