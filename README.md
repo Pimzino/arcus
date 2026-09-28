@@ -42,8 +42,9 @@ Get the latest version from the [releases page](https://github.com/Pimzino/arcus
 
 The builds are not code-signed yet, so the system warns the first time:
 
-* **macOS:** open Arcus once, then go to System Settings → Privacy & Security and click *Open Anyway*. If macOS
-  says the app is damaged, run `xattr -dr com.apple.quarantine /Applications/Arcus.app` and open it again.
+* **macOS:** open Arcus once, then go to System Settings → Privacy & Security and click *Open Anyway*. Releases
+  up to v0.6.0 were not signed at all, so macOS says they are damaged instead; for those, run
+  `xattr -dr com.apple.quarantine /Applications/Arcus.app` and open the app again.
 * **Windows:** SmartScreen shows *Windows protected your PC*; click *More info*, then *Run anyway*.
 
 **Linux** builds are published from v0.6.0 on. Every Linux release is tested end to end before it is
