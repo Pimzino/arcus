@@ -2,6 +2,13 @@
 
 Every release of Arcus, newest first, with the commits it added since the release before it.
 
+## v0.6.1 (2026-09-28)
+
+- Activity feed: Box's folder-root token refresh message is info, not an error ([16476b8](https://github.com/Pimzino/arcus/commit/16476b870037fa723dba5e45ce383d1cae34708f))
+- macOS: ad-hoc sign the app bundle so Gatekeeper offers Open Anyway instead of calling it damaged ([dc8ecda](https://github.com/Pimzino/arcus/commit/dc8ecda14db4b2b17d020aeea10d203c575a3fd0))
+
+All changes: [v0.6.0...v0.6.1](https://github.com/Pimzino/arcus/compare/v0.6.0...v0.6.1)
+
 ## v0.6.0 (2026-09-23)
 
 - Rename the app to Arcus, with a new logo, icon and wordmark ([13ff7fc](https://github.com/Pimzino/arcus/commit/13ff7fc5a9dfbc31a1e207b6e88a2615d63dabe6))
