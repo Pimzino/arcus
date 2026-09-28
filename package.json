@@ -1,5 +1,5 @@
 {
-  "name": "rclone-gui",
+  "name": "arcus",
   "private": true,
   "version": "0.6.1",
   "type": "module",
@@ -37,5 +37,6 @@
     "vitest": "^5.0.1"
   },
   "description": "Cross-platform desktop GUI for rclone",
-  "license": "GPL-3.0-only"
+  "license": "GPL-3.0-only",
+  "packageManager": "pnpm@12.6.0"
 }

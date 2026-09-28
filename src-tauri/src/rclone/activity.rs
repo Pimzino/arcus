@@ -557,7 +557,7 @@ mod tests {
 
     #[tokio::test]
     async fn pump_writes_the_log_and_reports_activity() {
-        let dir = std::env::temp_dir().join(format!("rclone-gui-activity-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("arcus-activity-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("transfer.log");
         let _ = std::fs::remove_file(&path);

@@ -110,7 +110,7 @@ pub(super) fn spawn_rcd(
     extra_args: &[String],
 ) -> AppResult<Spawned> {
     let port = free_port()?;
-    let user = "rclone-gui".to_string();
+    let user = "arcus".to_string();
     let pass = format!(
         "{}{}",
         uuid::Uuid::new_v4().simple(),

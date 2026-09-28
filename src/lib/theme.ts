@@ -2,7 +2,9 @@
 
 export type ThemeSetting = "system" | "light" | "dark";
 
-const STORAGE_KEY = "rclone-gui:theme";
+const STORAGE_KEY = "arcus:theme";
+/** Where the choice was kept before the app was renamed Arcus; read once, then moved to STORAGE_KEY. */
+const OLD_STORAGE_KEY = "rclone-gui:theme";
 const media = typeof window !== "undefined" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 let current: ThemeSetting = "system";
 
@@ -29,7 +31,14 @@ export function applyTheme(setting: ThemeSetting) {
 export function initTheme() {
   let saved: ThemeSetting = "system";
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === null) {
+      raw = localStorage.getItem(OLD_STORAGE_KEY);
+      if (raw !== null) {
+        localStorage.setItem(STORAGE_KEY, raw);
+        localStorage.removeItem(OLD_STORAGE_KEY);
+      }
+    }
     if (raw === "light" || raw === "dark" || raw === "system") saved = raw;
   } catch {
     /* ignore */

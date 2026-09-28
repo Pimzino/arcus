@@ -1,18 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Download,
   ExternalLink,
   FileCog,
   FolderOpen,
   Info,
+  Mail,
   Monitor,
   Moon,
   Package,
   Palette,
   Play,
+  Power,
   RefreshCw,
   RotateCcw,
   ScrollText,
+  Send,
   Server,
   ShieldCheck,
   SlidersHorizontal,
@@ -56,11 +59,21 @@ import {
 import { formatDateTime } from "../lib/format";
 import { openExternal, pickFile } from "../lib/native";
 import { rc } from "../lib/rc";
+import {
+  EMAIL_DEFAULT_PORTS,
+  SETTINGS_SECTION_EVENT,
+  looksLikeEmail,
+  parseAddressList,
+  parsePort,
+  portAfterSecurityChange,
+  takePendingSettingsSection,
+  type EmailSecurity,
+} from "../lib/email";
 import { currentSection } from "../lib/scrollSpy";
 import { rememberSessionOptions } from "../lib/sessionOptions";
 import { api, isTauri } from "../lib/tauri";
 import { defaultLogChoice } from "../lib/transferLog";
-import { defaultSettings, errorMessage, type LatestVersion, type RcOption } from "../lib/types";
+import { defaultSettings, errorMessage, type EmailSettings, type LatestVersion, type RcOption, type Settings } from "../lib/types";
 import { useAppStore, useDaemonRunning } from "../store/app";
 
 const SECTIONS = [
@@ -68,6 +81,8 @@ const SECTIONS = [
   { id: "daemon", label: "Daemon" },
   { id: "config", label: "Config file" },
   { id: "transfers", label: "Transfers & logs" },
+  { id: "background", label: "Background" },
+  { id: "email", label: "Email notifications" },
   { id: "options", label: "Global options" },
   { id: "macos", label: "macOS permissions" },
   { id: "appearance", label: "Appearance" },
@@ -98,6 +113,12 @@ export function SettingsPage() {
             </Section>
             <Section id="transfers">
               <TransfersCard />
+            </Section>
+            <Section id="background">
+              <BackgroundCard />
+            </Section>
+            <Section id="email">
+              <EmailCard />
             </Section>
             <Section id="options">
               <GlobalOptionsCard />
@@ -144,6 +165,23 @@ function SectionNav({ sections, body, content }: { sections: typeof SECTIONS; bo
     setActive(id);
     body?.querySelector(`#settings-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  // Another part of the app can send the user to a section (`openSettingsSection`, e.g. the action of an
+  // email failure toast). The request is picked up when this page mounts (effects run once the cards are in
+  // the DOM), or through the event when the page was already showing.
+  useEffect(() => {
+    if (!body) return;
+    const follow = () => {
+      const id = takePendingSettingsSection();
+      if (!id || !sections.some((s) => s.id === id)) return;
+      pinned.current = true;
+      setActive(id);
+      body.querySelector(`#settings-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    follow();
+    window.addEventListener(SETTINGS_SECTION_EVENT, follow);
+    return () => window.removeEventListener(SETTINGS_SECTION_EVENT, follow);
+  }, [body, sections]);
 
   useEffect(() => {
     if (!body || !content) return;
@@ -256,26 +294,61 @@ function SectionCard({
   );
 }
 
-/** A settings field: bold label, muted description, control below (the design system's
-    Field is the form label, one size down). */
+/**
+ * Settings fields in two columns (one on a narrow window). A pair's labels, controls and messages share
+ * sub-rows (CSS subgrid), so the two controls stay level however long either description is.
+ */
+function SettingGrid({ children }: { children: ReactNode }) {
+  return <div className="-mb-2 grid gap-x-6 gap-y-2 md:grid-cols-2">{children}</div>;
+}
+
+/** A titled group of a section, set off from what comes before it by a rule. */
+function SettingGroup({ title, description, children }: { title: string; description?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-4 border-t pt-4">
+      <div>
+        <h3 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">{title}</h3>
+        {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** A settings field: bold label, muted description, control below, and a line for its messages. A cell of a
+    `SettingGrid`, unless `standalone`. (The design system's Field is the form label, one size down.) */
 function SettingField({
   label,
   description,
   className,
+  standalone,
   children,
 }: {
   label: ReactNode;
   description?: ReactNode;
   className?: string;
+  standalone?: boolean;
   children: ReactNode;
 }) {
-  return (
-    <div className={cn("flex flex-col gap-2", className)}>
-      <div className="grid gap-0.5">
-        <h3 className="text-base font-semibold">{label}</h3>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+  const head = (
+    <div className="grid content-start gap-0.5">
+      <h3 className="text-base font-semibold">{label}</h3>
+      {description && <p className="text-sm text-muted-foreground">{description}</p>}
+    </div>
+  );
+  if (standalone) {
+    return (
+      <div className={cn("flex flex-col gap-2", className)}>
+        {head}
+        {children}
       </div>
-      {children}
+    );
+  }
+  // Control and messages share one row: the messages sit under the control and move nothing beside it.
+  return (
+    <div className={cn("row-span-2 grid min-w-0 grid-rows-subgrid", className)}>
+      {head}
+      <div className="flex min-w-0 flex-col gap-2 pb-2">{children}</div>
     </div>
   );
 }
@@ -426,7 +499,7 @@ function RcloneVersionCard() {
           </Table>
         </div>
       )}
-      <div className="grid gap-6 md:grid-cols-2">
+      <SettingGrid>
         <SettingField label="Pin a version" description="Leave empty to follow the latest stable release.">
           <div className="flex gap-2">
             <Input className="flex-1" value={pinned} placeholder="v1.75.1" onChange={(e) => setPinned(e.target.value)} />
@@ -456,7 +529,7 @@ function RcloneVersionCard() {
             </Button>
           </div>
         </SettingField>
-      </div>
+      </SettingGrid>
     </SectionCard>
   );
 }
@@ -539,7 +612,7 @@ function DaemonCard() {
           <Switch checked={settings?.autoStartDaemon ?? true} onChange={(v) => run("Could not save", () => saveSettings({ autoStartDaemon: v }))} />
         </SettingRow>
       </div>
-      <div className="grid gap-6 md:grid-cols-2">
+      <SettingGrid>
         <SettingField label="Log level" description="Verbosity of the daemon log.">
           <Select value={logLevel} onChange={(e) => setLogLevel(e.target.value)} options={["DEBUG", "INFO", "NOTICE", "ERROR"].map((v) => ({ value: v, label: v }))} />
         </SettingField>
@@ -549,7 +622,7 @@ function DaemonCard() {
         <SettingField className="md:col-span-2" label="Extra rcd flags" description="One per line, e.g. --cache-dir=/path or --rc-serve">
           <Textarea mono rows={2} value={extraArgs} onChange={(e) => setExtraArgs(e.target.value)} />
         </SettingField>
-      </div>
+      </SettingGrid>
       <div className="flex justify-end">
         <Button variant="default" loading={busy} disabled={!dirty} onClick={save}>
           Save daemon settings
@@ -581,7 +654,7 @@ function ConfigFileCard() {
           { label: "Cache dir", value: paths.data?.cache ?? "–" },
         ]}
       />
-      <SettingField label="Config file override" description="Empty uses rclone's default location. Restart the daemon to apply.">
+      <SettingField standalone label="Config file override" description="Empty uses rclone's default location. Restart the daemon to apply.">
         <div className="flex gap-2">
           <Input mono className="flex-1" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/path/to/rclone.conf" />
           {isTauri && (
@@ -677,6 +750,355 @@ function TransfersCard() {
           </SettingRow>
         </>
       )}
+    </SectionCard>
+  );
+}
+
+function BackgroundCard() {
+  const settings = useAppStore((s) => s.settings);
+  const os = useAppStore((s) => s.info?.os);
+  const saveSettings = useAppStore((s) => s.saveSettings);
+  const { run } = useAsyncAction();
+  const status = useQuery({ queryKey: ["backgroundStatus"], queryFn: () => api.backgroundStatus() });
+  const s = settings ?? defaultSettings;
+  const mac = os === "macos";
+  const place = mac ? "menu bar" : "system tray";
+
+  // The backend applies the settings as it saves them, but the tray icon may appear a moment later (it is
+  // created on the main thread), so the status is read again shortly after as well.
+  const save = (patch: Partial<Settings>) =>
+    run("Could not save", async () => {
+      try {
+        await saveSettings(patch);
+      } finally {
+        await status.refetch();
+        setTimeout(() => void status.refetch(), 1000);
+      }
+    });
+
+  const bg = status.data;
+  const trayMissing = s.runInBackground && bg && !bg.trayAvailable;
+  const loginMissing = s.launchAtLogin && bg && !bg.launchAtLoginRegistered;
+
+  return (
+    <SectionCard
+      icon={<Power />}
+      title="Background"
+      description={`Keep Arcus working with its window closed, so watch folders and running transfers carry on. It stays in the ${place} until you quit it there.`}
+    >
+      <SettingRow
+        title="Keep running when the window is closed"
+        description={
+          mac
+            ? "Closing the window leaves Arcus in the menu bar, without a Dock icon. Quit it from the menu bar icon or with ⌘Q."
+            : "Closing the window leaves Arcus in the system tray. Quit it from the tray icon's menu."
+        }
+      >
+        <Switch checked={s.runInBackground} onChange={(v) => save({ runInBackground: v })} />
+      </SettingRow>
+      <SettingRow
+        title="Open at login"
+        description={
+          s.runInBackground
+            ? `Starts Arcus when you log in to this computer, hidden in the ${place}.`
+            : `Starts Arcus when you log in to this computer. With the option above on, it starts hidden in the ${place} instead of opening its window.`
+        }
+      >
+        <Switch checked={s.launchAtLogin} onChange={(v) => save({ launchAtLogin: v })} />
+      </SettingRow>
+      {(trayMissing || loginMissing || status.error || bg?.launchedInBackground) && (
+        <div className="flex flex-col gap-2 pt-1">
+          {trayMissing && (
+            <Callout tone="warning" title={`No icon in the ${place}`}>
+              {mac
+                ? "Arcus could not add its menu bar icon. Closing the window still keeps it running; open Arcus again to bring the window back."
+                : os === "linux"
+                  ? "This desktop does not show tray icons, so Arcus has none. Closing the window still keeps it running; open Arcus again to bring the window back. On GNOME, the AppIndicator extension adds tray icons."
+                  : "Arcus could not add its tray icon. Closing the window still keeps it running; open Arcus again to bring the window back."}
+            </Callout>
+          )}
+          {loginMissing && (
+            <Callout
+              tone="warning"
+              title="Not set to open at login"
+              action={
+                <Button size="sm" onClick={() => save({ launchAtLogin: true })}>
+                  Try again
+                </Button>
+              }
+            >
+              Arcus could not register itself with the system to open at login. The app log has the details.
+            </Callout>
+          )}
+          {status.error && <ErrorMessage error={status.error} />}
+          {bg?.launchedInBackground && <p className="text-sm text-muted-foreground">This session of Arcus was started at login, in the background.</p>}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+/** The SMTP fields as they are being edited: text as typed, turned into settings on save. */
+type EmailDraft = { host: string; port: string; security: EmailSecurity; username: string; fromAddress: string; to: string };
+const EMAIL_DRAFT_KEYS = ["host", "port", "security", "username", "fromAddress", "to"] as const;
+
+const emailDraft = (e: EmailSettings): EmailDraft => ({
+  host: e.host,
+  port: String(e.port),
+  security: e.security,
+  username: e.username,
+  fromAddress: e.fromAddress,
+  to: e.toAddresses.join(", "),
+});
+
+const SECURITY_OPTIONS: { value: EmailSecurity; label: string }[] = [
+  { value: "starttls", label: "STARTTLS" },
+  { value: "tls", label: "SSL/TLS" },
+  { value: "none", label: "None" },
+];
+
+type TestResult = { state: "sending" } | { state: "sent"; to: string[] } | { state: "failed"; message: string };
+
+function EmailCard() {
+  const settings = useAppStore((s) => s.settings);
+  const saveSettings = useAppStore((s) => s.saveSettings);
+  const queryClient = useQueryClient();
+  const { busy, run } = useAsyncAction();
+  const status = useQuery({ queryKey: ["emailStatus"], queryFn: () => api.emailStatus() });
+  const email = (settings ?? defaultSettings).email;
+
+  const saved = useMemo(() => emailDraft(email), [email]);
+  const [draft, setDraft] = useState(saved);
+  const lastSaved = useRef(saved);
+  // The toggles above save at once, which replaces `settings`. Fields the user has not touched follow the
+  // saved value; fields being edited keep what was typed.
+  useEffect(() => {
+    const previous = lastSaved.current;
+    lastSaved.current = saved;
+    setDraft((d) => {
+      const next = { ...d };
+      for (const k of EMAIL_DRAFT_KEYS) if (d[k] === previous[k]) (next as Record<string, string>)[k] = saved[k];
+      return next;
+    });
+  }, [saved]);
+  const edit = (patch: Partial<EmailDraft>) => setDraft((d) => ({ ...d, ...patch }));
+
+  // The password is write-only: typed here, sent to the backend, and forgotten. It never comes back.
+  const [password, setPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const passwordSet = status.data?.passwordSet ?? false;
+  const editingPassword = !passwordSet || changingPassword;
+
+  const [test, setTest] = useState<TestResult | null>(null);
+
+  const port = parsePort(draft.port);
+  const recipients = parseAddressList(draft.to);
+  const badRecipients = recipients.filter((a) => !looksLikeEmail(a));
+  const hostError = /\s/.test(draft.host.trim())
+    ? "The server name cannot contain spaces."
+    : draft.host.includes("://")
+      ? "Enter the server name only, e.g. smtp.example.com."
+      : null;
+  const portError = port === null ? "Enter a port between 1 and 65535." : null;
+  const fromError = draft.fromAddress.trim() && !looksLikeEmail(draft.fromAddress.trim()) ? `“${draft.fromAddress.trim()}” does not look like an email address.` : null;
+  const toError = badRecipients.length
+    ? `${badRecipients.length === 1 ? "This does" : "These do"} not look like an email address: ${badRecipients.map((a) => `“${a}”`).join(", ")}.`
+    : null;
+  const invalid = !!(hostError || portError || fromError || toError);
+
+  const fieldsDirty =
+    draft.host.trim() !== email.host ||
+    port !== email.port ||
+    draft.security !== email.security ||
+    draft.username.trim() !== email.username ||
+    draft.fromAddress.trim() !== email.fromAddress ||
+    recipients.join("\n") !== email.toAddresses.join("\n");
+  const dirty = fieldsDirty || (editingPassword && password !== "");
+  const missing = !draft.host.trim() || !draft.fromAddress.trim() || recipients.length === 0;
+
+  /** Saves the SMTP fields and a newly typed password. Throws, for the caller to report. */
+  const persist = async () => {
+    if (fieldsDirty) {
+      const current = useAppStore.getState().settings?.email ?? email;
+      const next: EmailSettings = {
+        ...current,
+        host: draft.host.trim(),
+        port: port ?? current.port,
+        security: draft.security,
+        username: draft.username.trim(),
+        fromAddress: draft.fromAddress.trim(),
+        toAddresses: recipients,
+      };
+      const result = await saveSettings({ email: next });
+      setDraft(emailDraft(result.email));
+    }
+    if (editingPassword && password !== "") {
+      queryClient.setQueryData(["emailStatus"], await api.emailSetPassword(password));
+      setPassword("");
+      setChangingPassword(false);
+    }
+  };
+
+  // The switches and choices save on their own, onto the saved email settings rather than the draft.
+  const saveOption = (patch: Partial<EmailSettings>) =>
+    run("Could not save", async () => {
+      const current = useAppStore.getState().settings?.email ?? email;
+      await saveSettings({ email: { ...current, ...patch } });
+    });
+
+  const removePassword = () =>
+    run("Could not remove the password", async () => {
+      queryClient.setQueryData(["emailStatus"], await api.emailSetPassword(null));
+      setPassword("");
+      setChangingPassword(false);
+    });
+
+  const sendTest = async () => {
+    setTest({ state: "sending" });
+    try {
+      await persist();
+      await api.emailSendTest();
+      setTest({ state: "sent", to: recipients });
+    } catch (e) {
+      setTest({ state: "failed", message: errorMessage(e) });
+    } finally {
+      void status.refetch();
+    }
+  };
+
+  const changeSecurity = (security: EmailSecurity) => edit({ security, port: portAfterSecurityChange(draft.port, draft.security, security) });
+
+  const last = status.data;
+  const lastErrorShown = last?.lastError && test?.state !== "failed";
+
+  return (
+    <SectionCard
+      icon={<Mail />}
+      title="Email notifications"
+      description="Arcus can email you when a transfer ends, through a mail server (SMTP) of your choice. Watch folders choose their own emails, in each watch folder's settings."
+      bodyClassName="flex flex-col gap-4"
+    >
+      <div>
+        <SettingRow title="Send email notifications" description="Nothing is sent while this is off, for transfers or watch folders.">
+          <Switch checked={email.enabled} onChange={(v) => saveOption({ enabled: v })} />
+        </SettingRow>
+        <SettingRow title="Email me about transfers I start" description="Transfers started from the explorer or the transfer dialog.">
+          <Segmented
+            size="sm"
+            options={[
+              { value: "never", label: "Never" },
+              { value: "failure", label: "When they fail" },
+              { value: "always", label: "Always" },
+            ]}
+            value={email.notifyTransfers}
+            onChange={(v) => saveOption({ notifyTransfers: v })}
+          />
+        </SettingRow>
+        <SettingRow title="Attach the log when a transfer fails" description="Adds the transfer's log file to the email, the last 5 MB of it when it is bigger.">
+          <Switch checked={email.attachLogOnFailure} onChange={(v) => saveOption({ attachLogOnFailure: v })} />
+        </SettingRow>
+      </div>
+      <SettingGroup title="Mail server" description="The SMTP server that sends Arcus's emails, as your email provider gives it.">
+        <SettingGrid>
+          <SettingField label="Server" description="The provider's server for sending mail.">
+            <Input mono value={draft.host} invalid={!!hostError} placeholder="smtp.example.com" aria-label="Server" onChange={(e) => edit({ host: e.target.value })} />
+            {hostError && <p className="text-sm text-destructive">{hostError}</p>}
+          </SettingField>
+          <SettingField label="Security and port" description={`Most providers use STARTTLS on ${EMAIL_DEFAULT_PORTS.starttls}, or SSL/TLS on ${EMAIL_DEFAULT_PORTS.tls}.`}>
+            <div className="flex gap-2">
+              <Select className="flex-1" value={draft.security} aria-label="Security" onChange={(e) => changeSecurity(e.target.value as EmailSecurity)} options={SECURITY_OPTIONS} />
+              <Input mono className="w-24" inputMode="numeric" aria-label="Port" value={draft.port} invalid={!!portError} onChange={(e) => edit({ port: e.target.value })} />
+            </div>
+            {portError && <p className="text-sm text-destructive">{portError}</p>}
+            {draft.security === "none" && (
+              <p className="text-sm text-warning">Without encryption, the password and the emails cross the network readable. Use it only for a relay you run yourself.</p>
+            )}
+          </SettingField>
+          <SettingField label="Username" description="Often your full email address. Empty when the server needs no sign-in.">
+            <Input mono value={draft.username} autoComplete="off" aria-label="Username" onChange={(e) => edit({ username: e.target.value })} />
+          </SettingField>
+          <SettingField label="Password" description="Kept in a file only your user account can read, and never shown again.">
+            {editingPassword ? (
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  className="flex-1"
+                  autoComplete="new-password"
+                  aria-label="Password"
+                  value={password}
+                  placeholder={passwordSet ? "New password" : "Password or app password"}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                {changingPassword && (
+                  <Button
+                    onClick={() => {
+                      setPassword("");
+                      setChangingPassword(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="flex h-8 items-center gap-2">
+                <StatusBadge tone="success">Saved</StatusBadge>
+                <Button size="sm" onClick={() => setChangingPassword(true)}>
+                  Change
+                </Button>
+                <Button size="sm" variant="ghost" icon={<Trash2 />} loading={busy} onClick={removePassword}>
+                  Remove
+                </Button>
+              </div>
+            )}
+          </SettingField>
+        </SettingGrid>
+      </SettingGroup>
+      <SettingGroup title="Addresses" description="Who the emails come from, and who gets them.">
+        <SettingGrid>
+          <SettingField label="From" description="The sender. Many providers only accept your own address here.">
+            <Input mono value={draft.fromAddress} invalid={!!fromError} placeholder="arcus@example.com" aria-label="From" onChange={(e) => edit({ fromAddress: e.target.value })} />
+            {fromError && <p className="text-sm wrap-anywhere text-destructive">{fromError}</p>}
+          </SettingField>
+          <SettingField label="To" description="One or more addresses, separated by commas.">
+            <Input mono value={draft.to} invalid={!!toError} placeholder="you@example.com" aria-label="To" onChange={(e) => edit({ to: e.target.value })} />
+            {toError && <p className="text-sm wrap-anywhere text-destructive">{toError}</p>}
+          </SettingField>
+        </SettingGrid>
+      </SettingGroup>
+      {test?.state === "sent" && (
+        <Callout tone="success" title="Test email sent">
+          <span className="wrap-anywhere">
+            The server accepted it for {test.to.join(", ")}. If it does not arrive within a few minutes, look in the spam folder.
+          </span>
+        </Callout>
+      )}
+      {test?.state === "failed" && (
+        <Callout tone="danger" title="The test email could not be sent">
+          <span className="wrap-anywhere">{test.message}</span>
+        </Callout>
+      )}
+      {lastErrorShown && (
+        <Callout tone="warning" title="The last email could not be sent">
+          <span className="wrap-anywhere">{last.lastError}</span>
+        </Callout>
+      )}
+      {status.error && <ErrorMessage error={status.error} />}
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-4">
+        <p className="mr-auto min-w-0 text-sm text-muted-foreground">
+          {missing
+            ? "Fill in the mail server, From and To to send a test email."
+            : last?.lastSentAtUnix
+              ? `Last email sent ${formatDateTime(last.lastSentAtUnix)}.`
+              : "No email sent yet."}
+        </p>
+        <Button icon={<Send />} disabled={invalid || missing} loading={test?.state === "sending"} onClick={() => void sendTest()}>
+          Send test email
+        </Button>
+        <Button variant="default" disabled={!dirty || invalid} loading={busy && test?.state !== "sending"} onClick={() => run("Could not save", persist, "Saved")}>
+          Save
+        </Button>
+      </div>
     </SectionCard>
   );
 }

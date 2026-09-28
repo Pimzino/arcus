@@ -1,4 +1,4 @@
-import { ArrowLeftRight, FileText, FolderOpen, Info, MoreHorizontal, Pencil, Plus, RotateCcw, Square, Trash2 } from "lucide-react";
+import { ArrowLeftRight, FileText, FolderOpen, FolderSync, Info, MoreHorizontal, Pencil, Plus, RotateCcw, Square, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useFileManager } from "../components/app/FileManager";
 import { activityFacts, PhaseLine } from "../components/app/JobActivity";
@@ -185,6 +185,7 @@ function JobRow({ job }: { job: TrackedJob }) {
   const retry = useJobsStore((s) => s.retry);
   const start = useJobsStore((s) => s.start);
   const settings = useAppStore((s) => s.settings);
+  const setPage = useAppStore((s) => s.setPage);
   const fm = useFileManager();
   const [details, setDetails] = useState(false);
   const [showLog, setShowLog] = useState(false);
@@ -228,6 +229,7 @@ function JobRow({ job }: { job: TrackedJob }) {
   const menuItems: MenuItemDef[] = [
     ...runAsItems,
     ...(showItems.length ? [...showItems, { type: "separator" as const }] : []),
+    ...(job.watchId ? [{ label: "Show watch folder", icon: <FolderSync />, onSelect: () => setPage("watch") }, { type: "separator" as const }] : []),
     { label: "Remove from list", icon: <Trash2 />, danger: true, onSelect: act("Could not remove the job", () => remove(job.id)) },
   ];
 
@@ -257,6 +259,12 @@ function JobRow({ job }: { job: TrackedJob }) {
           <div className="truncate font-semibold" title={job.title}>
             {job.title}
           </div>
+          {job.watchId && (
+            <div className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground" title={`Started by the watch folder “${job.watchName ?? ""}”`}>
+              <FolderSync className="size-3 shrink-0" aria-hidden />
+              <span className="truncate">Watch folder: {job.watchName}</span>
+            </div>
+          )}
           <div className="truncate font-mono text-xs text-muted-foreground" title={job.destination ? `${job.source} → ${job.destination}` : job.source}>
             {job.source}
             {job.destination ? ` → ${job.destination}` : ""}
@@ -306,7 +314,11 @@ function JobRow({ job }: { job: TrackedJob }) {
               </IconButton>
             ) : (
               job.rcPath && (
-                <IconButton label="Run again" size="sm" onClick={act("Could not restart the job", () => retry(job.id))}>
+                <IconButton
+                  label={job.watchId ? "Run the watch folder now" : "Run again"}
+                  size="sm"
+                  onClick={act(job.watchId ? "Could not run the watch folder" : "Could not restart the job", () => retry(job.id))}
+                >
                   <RotateCcw />
                 </IconButton>
               )

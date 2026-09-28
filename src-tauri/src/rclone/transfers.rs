@@ -373,7 +373,7 @@ mod tests {
 
     /// An empty folder of our own under the system temp directory, named after the test.
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("rclone-gui-prune-{}-{name}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("arcus-prune-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -538,12 +538,12 @@ mod live_tests {
     use serde_json::json;
 
     /// Runs real transfers through dedicated daemons. Needs an rclone binary:
-    /// `RCLONE_GUI_TEST_BINARY=/path/to/rclone cargo test -- --ignored live_transfer --nocapture`
+    /// `ARCUS_TEST_BINARY=/path/to/rclone cargo test -- --ignored live_transfer --nocapture`
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
     async fn live_transfer_end_to_end() {
-        let binary = PathBuf::from(std::env::var("RCLONE_GUI_TEST_BINARY").expect("RCLONE_GUI_TEST_BINARY"));
-        let base = std::env::temp_dir().join(format!("rclone-gui-logtest-{}", std::process::id()));
+        let binary = PathBuf::from(std::env::var("ARCUS_TEST_BINARY").expect("ARCUS_TEST_BINARY"));
+        let base = std::env::temp_dir().join(format!("arcus-logtest-{}", std::process::id()));
         let paths = AppPaths::new(base.join("data"), base.join("logs"));
         paths.ensure().unwrap();
         // source data

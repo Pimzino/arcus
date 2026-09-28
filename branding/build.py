@@ -10,9 +10,10 @@ Everything it makes lands in this folder, except the React components the app dr
 (src/components/app/Brand.tsx). The platform icons in icons/ come from app-icon.png through `tauri icon`, which
 this script runs; tauri.conf.json points the bundle at them.
 
-Requirements: skia-python and fonttools, plus the repo's npm dependencies for `tauri icon`:
+Requirements: skia-python and fonttools, plus the repo's installed dependencies for `tauri icon`:
     python3 -m venv .venv-brand && .venv-brand/bin/pip install skia-python fonttools
     .venv-brand/bin/python branding/build.py
+    .venv-brand/bin/python branding/build.py --tray    # only the tray / menu bar icons
 """
 
 from __future__ import annotations
@@ -105,10 +106,10 @@ def _sector(r0: float, r1: float, a0: float, a1: float) -> skia.Path:
     return p
 
 
-def _joint(angle: float) -> skia.Path:
+def _joint(angle: float, gap: float = GAP) -> skia.Path:
     """A constant-width strip along the radius at `angle`: cutting it out leaves a joint of even width."""
     p = skia.Path()
-    p.addRect(skia.Rect.MakeLTRB(0, -GAP / 2, R + KEY_PROUD + 10, GAP / 2))
+    p.addRect(skia.Rect.MakeLTRB(0, -gap / 2, R + KEY_PROUD + 10, gap / 2))
     m = skia.Matrix()
     m.setRotate(-angle)
     m.postTranslate(CX, CY)
@@ -120,8 +121,8 @@ def _op(a: skia.Path, b: skia.Path, op) -> skia.Path:
     return skia.Op(a, b, op)
 
 
-def mark_stones() -> list[skia.Path]:
-    """The five stones, left to right; the outer two carry their piers."""
+def mark_stones(gap: float = GAP) -> list[skia.Path]:
+    """The five stones, left to right; the outer two carry their piers. `gap` widens the joints for tiny sizes."""
     r = R - T
     k0, k1 = 90 - KEY_SPAN / 2, 90 + KEY_SPAN / 2
     side = (180 - KEY_SPAN) / 2
@@ -135,7 +136,7 @@ def mark_stones() -> list[skia.Path]:
             pier.addRect(skia.Rect.MakeLTRB(x0, CY, x0 + T, CY + PIER))
             p = _op(p, pier, skia.PathOp.kUnion_PathOp)
         for a in (a0, a1):
-            p = _op(p, _joint(a), skia.PathOp.kDifference_PathOp)
+            p = _op(p, _joint(a, gap), skia.PathOp.kDifference_PathOp)
         stones.append(p)
     return stones
 
@@ -379,8 +380,9 @@ def write_platform_icons() -> None:
     """Every size macOS, Windows and Linux need, from app-icon.png, into icons/. `tauri icon` also makes Android and iOS
     sets and a 64 px PNG; this app ships neither, so they go."""
     out = HERE / "icons"
-    run = subprocess.run(["npx", "tauri", "icon", str(HERE / "app-icon.png"), "--output", str(out)], cwd=REPO,
-                         capture_output=True, text=True)
+    # The repo's own copy of the Tauri CLI, run directly: npx could fetch and run a package from the registry.
+    run = subprocess.run([str(REPO / "node_modules" / ".bin" / "tauri"), "icon", str(HERE / "app-icon.png"),
+                          "--output", str(out)], cwd=REPO, capture_output=True, text=True)
     if run.returncode:
         raise SystemExit(f"tauri icon failed:\n{run.stdout}{run.stderr}")
     shutil.rmtree(out / "android", ignore_errors=True)
@@ -423,6 +425,48 @@ export function BrandLockup({{ className }}: {{ className?: string }}) {{
 }}
 """
     (REPO / "src" / "components" / "app" / "Brand.tsx").write_text(tsx)
+
+
+# ---------------------------------------------------------------------------------------------------------
+# Tray / menu bar icons, which the app embeds (src-tauri/src/background.rs). They are not part of `tauri icon`'s
+# set: a menu bar icon has its own rules.
+
+# The joints widen at these sizes: at the standard 2.6 a joint is under a pixel wide and the stones run together.
+TRAY_GAP = 5.0
+
+
+def render_tray_icons() -> None:
+    """macOS: a template image, black with alpha only, which the menu bar tints for light and dark menu bars and
+    for the highlighted state. macOS draws a tray image 18 pt tall whatever its pixel size, so this canvas is
+    18 pt at about 3.5x, and the mark fills 16 pt of it, the height of the system's own menu bar symbols.
+
+    Windows and Linux: the favicon's design, the mark on a small midnight tile. Taskbars and panels are light or
+    dark depending on the theme, and the tile keeps the white keystone and the blue stones readable on both."""
+    out = HERE / "icons"
+    h = 64
+    mark_h = h * 16 / 18
+    s = mark_h / MARK_H
+    w = math.ceil(MARK_W * s + (h - mark_h))
+    surface = skia.Surface(w, h)
+    c = surface.getCanvas()
+    c.clear(skia.ColorTRANSPARENT)
+    black = skia.Paint(AntiAlias=True, Color=col((0, 0, 0)))
+    for p in mark_stones(TRAY_GAP):
+        c.drawPath(transformed(p, s, (w - MARK_W * s) / 2, (h - mark_h) / 2), black)
+    surface.makeImageSnapshot().save(str(out / "tray-template.png"), skia.kPNG)
+
+    size = 64
+    surface = skia.Surface(size, size)
+    c = surface.getCanvas()
+    c.clear(skia.ColorTRANSPARENT)
+    c.drawRRect(skia.RRect.MakeRectXY(skia.Rect.MakeWH(size, size), 12, 12),
+                skia.Paint(AntiAlias=True, Color=col(MIDNIGHT_BOTTOM)))
+    pad = 8.0
+    s = (size - 2 * pad) / MARK_W
+    dy = (size - MARK_H * s) / 2
+    for p, colour in zip(mark_stones(TRAY_GAP), stone_colours(WHITE)):
+        c.drawPath(transformed(p, s, pad, dy), skia.Paint(AntiAlias=True, Color=col(colour)))
+    surface.makeImageSnapshot().save(str(out / "tray.png"), skia.kPNG)
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -499,11 +543,20 @@ def render_sheet() -> None:
 
 
 if __name__ == "__main__":
+    import sys
+
+    # `--tray` makes only the tray icons, leaving everything else (and `tauri icon`'s output) untouched.
+    if sys.argv[1:] == ["--tray"]:
+        render_tray_icons()
+        for p in sorted((HERE / "icons").glob("tray*.png")):
+            print(p.relative_to(REPO))
+        raise SystemExit(0)
     render_app_icon()
     write_vectors()
     write_web_font()
     write_react()
     render_sheet()
     write_platform_icons()
-    for p in sorted([*HERE.glob("*.png"), *SVG_DIR.glob("*.svg")]):
+    render_tray_icons()
+    for p in sorted([*HERE.glob("*.png"), *SVG_DIR.glob("*.svg"), *(HERE / "icons").glob("tray*.png")]):
         print(p.relative_to(REPO))

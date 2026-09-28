@@ -27,13 +27,16 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # pnpm at the version package.json pins (packageManager), with its store cached.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          cache: true
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
       - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
@@ -41,7 +44,7 @@ jobs:
       - name: Linux webkit deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       - run: cargo test --manifest-path src-tauri/Cargo.toml
 
   linux-e2e:
@@ -51,10 +54,13 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # pnpm at the version package.json pins (packageManager), with its store cached.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          cache: true
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
-          cache: npm
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
       - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
@@ -64,13 +70,13 @@ jobs:
       - name: Linux webkit deps, WebKitWebDriver and a virtual display
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf file libfuse2 webkit2gtk-driver xvfb
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf file libfuse2 webkit2gtk-driver xvfb
       - name: tauri-driver
         run: cargo install tauri-driver --locked
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
       - name: Build the AppImage
         # The file people download, built the way release.yml builds it, so a release has nothing untried.
-        run: npm run tauri build -- --bundles appimage
+        run: pnpm tauri build --bundles appimage
       - name: Use the AppImage like a first-time user
         shell: bash
         run: |
@@ -79,10 +85,10 @@ jobs:
           ARCUS_BIN="${appimage[0]}" xvfb-run -a node e2e/linux.mjs
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
-      - name: Keep the screenshots
+      - name: Keep the screenshots, emails and report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: linux-e2e-screenshots
+          name: linux-e2e-artifacts
           path: e2e/artifacts/
           if-no-files-found: ignore

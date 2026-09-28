@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Cutting a release:
 //
-//   npm run release -- <patch|minor|major|x.y.z> [--dry-run] [--trailer "Key: value"]…
+//   pnpm release <patch|minor|major|x.y.z> [--dry-run] [--trailer "Key: value"]…
 //
 // On an up-to-date main with nothing uncommitted, this sets the new version in every file that records
 // it, adds a section to CHANGELOG.md listing each commit since the previous release with its commit ID,
@@ -24,13 +24,14 @@ const RELEASE_SUBJECT = /^Release v\d+\.\d+\.\d+$/;
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
 
 /**
- * Files that record the app version, other than package.json and package-lock.json (which `npm version`
- * updates). In each pattern the second group is the version.
+ * Files that record the app version. In each pattern the second group is the version. pnpm-lock.yaml does not
+ * record the app's own version, so package.json is the only JavaScript file here.
  */
 export const VERSION_FILES = {
+  "package.json": /^( {2}"version": ")([^"]*)(")/m,
   "src-tauri/tauri.conf.json": /^( {2}"version": ")([^"]*)(")/m,
   "src-tauri/Cargo.toml": /^(\[package\]\n(?:(?!\[)[^\n]*\n)*?version = ")([^"]*)(")/m,
-  "src-tauri/Cargo.lock": /^(\[\[package\]\]\nname = "rclone-gui"\nversion = ")([^"]*)(")/m,
+  "src-tauri/Cargo.lock": /^(\[\[package\]\]\nname = "arcus"\nversion = ")([^"]*)(")/m,
 };
 
 /** -1, 0 or 1 as version `a` is lower than, equal to or higher than `b`. */
@@ -105,9 +106,7 @@ const readRepoFile = (file) => readFileSync(path.join(ROOT, file), "utf8");
 
 /** Every version the repository records, by where it is recorded. */
 export function recordedVersions(read = readRepoFile) {
-  const pkg = JSON.parse(read("package.json"));
-  const lock = JSON.parse(read("package-lock.json"));
-  const versions = { "package.json": pkg.version, "package-lock.json": lock.version, 'package-lock.json packages[""]': lock.packages?.[""]?.version };
+  const versions = {};
   for (const [file, pattern] of Object.entries(VERSION_FILES)) versions[file] = readVersion(read(file), pattern);
   return versions;
 }
@@ -166,8 +165,6 @@ function release(bump, { dryRun, trailers }) {
     return;
   }
 
-  const win = process.platform === "win32";
-  execFileSync(win ? "npm.cmd" : "npm", ["version", version, "--no-git-tag-version", "--allow-same-version"], { cwd: ROOT, stdio: ["ignore", "ignore", "inherit"], shell: win });
   for (const [file, pattern] of Object.entries(VERSION_FILES)) {
     writeFileSync(path.join(ROOT, file), writeVersion(readRepoFile(file), pattern, version, file));
   }
@@ -178,7 +175,7 @@ function release(bump, { dryRun, trailers }) {
     throw new ReleaseError(`The version is still not ${version} in ${stale.map(([where, v]) => `${where} (${v})`).join(", ")}; nothing was committed.`);
   }
 
-  git("add", "package.json", "package-lock.json", ...Object.keys(VERSION_FILES), "CHANGELOG.md");
+  git("add", ...Object.keys(VERSION_FILES), "CHANGELOG.md");
   git("commit", "--quiet", "-m", `Release ${tag}`, ...trailers.flatMap((trailer) => ["--trailer", trailer]));
   git("tag", "--annotate", tag, "-m", `Arcus ${tag}`);
   try {

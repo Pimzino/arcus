@@ -58,11 +58,13 @@ pub fn settings_get(state: State<'_, AppState>) -> Settings {
 }
 
 #[tauri::command]
-pub fn settings_set(state: State<'_, AppState>, mut settings: Settings) -> AppResult<Settings> {
+pub fn settings_set(app: AppHandle, state: State<'_, AppState>, mut settings: Settings) -> AppResult<Settings> {
     // The UI only ever edits migrated settings; a version it leaves out must not migrate them again.
     settings.settings_version = settings::SETTINGS_VERSION;
     settings::save(&state.paths.settings_file, &settings)?;
     *state.settings.lock().unwrap() = settings.clone();
+    // Tray icon and the launch-at-login entry follow the settings at once.
+    crate::background::apply(&app, &settings);
     Ok(settings)
 }
 
@@ -598,7 +600,7 @@ mod tests {
 
     #[test]
     fn linux_drives_under_a_user_folder_are_listed_themselves() {
-        let root = std::env::temp_dir().join(format!("rclone-gui-volumes-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("arcus-volumes-{}", std::process::id()));
         let media = root.join("media");
         let mnt = root.join("mnt");
         for dir in [media.join("sam/USB STICK"), media.join("sam/Backup"), media.join("cdrom"), mnt.join("nas")] {

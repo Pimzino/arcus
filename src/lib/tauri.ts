@@ -7,6 +7,13 @@ import * as shim from "./devShim";
 import {
   toAppError,
   type AppInfo,
+  type BackgroundStatus,
+  type EmailStatus,
+  type JobReport,
+  type WatchJob,
+  type WatchList,
+  type WatchRule,
+  type WatchRun,
   type DaemonInfo,
   type InstalledRclone,
   type LatestVersion,
@@ -101,4 +108,25 @@ export const api = {
   legacyAppInstalls: () => invoke<string[]>("legacy_app_installs"),
   /** Move one of those copies to the Trash; the backend accepts nothing else. */
   trashLegacyApp: (path: string) => invoke<void>("trash_legacy_app", { path }),
+
+  /** Tray icon, launch at login: what is actually in place (the settings say what is wanted). */
+  backgroundStatus: () => invoke<BackgroundStatus>("background_status"),
+
+  emailStatus: () => invoke<EmailStatus>("email_status"),
+  /** Save the SMTP password (`null` forgets it). It is never read back. */
+  emailSetPassword: (password: string | null) => invoke<EmailStatus>("email_set_password", { password }),
+  /** Send a test email with the saved settings; rejects with the server's answer. */
+  emailSendTest: () => invoke<void>("email_send_test"),
+  /** A transfer started by hand has ended; the backend emails about it if Settings ask for that. */
+  notifyTransferFinished: (report: JobReport) => invoke<void>("notify_transfer_finished", { report }),
+
+  /** Watch folders. Changes arrive as `watch:status` (one WatchStatus), `watch:paused` ({ paused }) and `watch:job` (WatchJob). */
+  watchList: () => invoke<WatchList>("watch_list"),
+  watchSave: (rule: WatchRule) => invoke<WatchRule>("watch_save", { rule }),
+  watchDelete: (id: string) => invoke<void>("watch_delete", { id }),
+  watchRunNow: (id: string) => invoke<void>("watch_run_now", { id }),
+  watchStop: (id: string) => invoke<void>("watch_stop", { id }),
+  watchSetPaused: (paused: boolean) => invoke<void>("watch_set_paused", { paused }),
+  watchHistory: (id: string) => invoke<WatchRun[]>("watch_history", { id }),
+  watchJobs: () => invoke<WatchJob[]>("watch_jobs"),
 };

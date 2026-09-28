@@ -49,6 +49,49 @@ pub struct Settings {
     pub transfer_log_cleanup_interval_hours: u32,
     /// Whether a sweep also runs when the app starts.
     pub transfer_log_cleanup_on_start: bool,
+    /// Closing the window keeps Arcus running in the tray / menu bar, so watch folders and transfers go on.
+    pub run_in_background: bool,
+    /// Start Arcus, hidden in the tray, when the user logs in (see `background.rs`).
+    pub launch_at_login: bool,
+    /// SMTP settings for email notifications. The password is not here: it is kept in its own file
+    /// (`email.rs`), never sent to the UI.
+    pub email: EmailSettings,
+}
+
+/// How Arcus sends email notifications. See `email.rs`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct EmailSettings {
+    pub enabled: bool,
+    pub host: String,
+    pub port: u16,
+    /// `starttls` (usually port 587), `tls` (implicit TLS, usually 465) or `none` (plain, local relays only).
+    pub security: String,
+    /// Empty: the server takes mail without signing in.
+    pub username: String,
+    pub from_address: String,
+    pub to_addresses: Vec<String>,
+    /// Which transfers started by hand send an email when they end: `never`, `failure` or `always`.
+    /// Watch folders have a policy of their own.
+    pub notify_transfers: String,
+    /// Attach the transfer's log file to the email of a failed transfer.
+    pub attach_log_on_failure: bool,
+}
+
+impl Default for EmailSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            host: String::new(),
+            port: 587,
+            security: "starttls".to_string(),
+            username: String::new(),
+            from_address: String::new(),
+            to_addresses: Vec::new(),
+            notify_transfers: "failure".to_string(),
+            attach_log_on_failure: true,
+        }
+    }
 }
 
 impl Default for Settings {
@@ -72,6 +115,9 @@ impl Default for Settings {
             transfer_log_retention_days: 30,
             transfer_log_cleanup_interval_hours: 24,
             transfer_log_cleanup_on_start: true,
+            run_in_background: false,
+            launch_at_login: false,
+            email: EmailSettings::default(),
         }
     }
 }
@@ -130,7 +176,7 @@ mod tests {
     }
 
     fn temp_settings_path(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("rclone-gui-settings-{}-{name}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("arcus-settings-{}-{name}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("settings.json")
     }

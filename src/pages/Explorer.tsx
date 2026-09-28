@@ -64,7 +64,7 @@ type SortKey = "name" | "size" | "modTime";
 type Entry = { name: string; isDir: boolean; id?: string };
 type DragPayload = { pane: number; loc: Location; entries: Entry[] };
 
-const DRAG_TYPE = "application/x-rclone-gui";
+const DRAG_TYPE = "application/x-arcus";
 let dragPayload: DragPayload | null = null;
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });

@@ -209,22 +209,22 @@ mod tests {
     #[test]
     fn bundle_is_found_from_its_executable() {
         assert_eq!(
-            bundle_from_exe(Path::new("/Applications/Arcus.app/Contents/MacOS/rclone-gui")),
+            bundle_from_exe(Path::new("/Applications/Arcus.app/Contents/MacOS/arcus")),
             Some(PathBuf::from("/Applications/Arcus.app"))
         );
     }
 
     #[test]
     fn bare_binaries_have_no_bundle() {
-        assert_eq!(bundle_from_exe(Path::new("/tmp/target/debug/rclone-gui")), None);
-        assert_eq!(bundle_from_exe(Path::new("rclone-gui")), None);
+        assert_eq!(bundle_from_exe(Path::new("/tmp/target/debug/arcus")), None);
+        assert_eq!(bundle_from_exe(Path::new("arcus")), None);
     }
 
     // Reads the plists with /usr/bin/plutil, which only macOS has; the feature is macOS-only too.
     #[cfg(target_os = "macos")]
     #[test]
     fn legacy_installs_need_the_old_name_and_this_identifier() {
-        let home = std::env::temp_dir().join(format!("rclone-gui-legacy-{}", std::process::id()));
+        let home = std::env::temp_dir().join(format!("arcus-legacy-{}", std::process::id()));
         let apps = home.join("Applications");
         let plist = |bundle: &str, id: &str| {
             let contents = apps.join(bundle).join("Contents");
@@ -254,7 +254,7 @@ mod tests {
 
     #[test]
     fn missing_probe_files_mean_unknown_and_missing() {
-        let dir = std::env::temp_dir().join(format!("rclone-gui-fda-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("arcus-fda-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         assert_eq!(full_disk_access(&dir), "unknown");
         assert!(probe_protected_folders(&dir).iter().all(|f| f.status == "missing"));

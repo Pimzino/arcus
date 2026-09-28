@@ -87,12 +87,13 @@ describe("CHANGELOG.md", () => {
 
 describe("version files", () => {
   const samples = {
+    "package.json": '{\n  "name": "arcus",\n  "version": "0.1.0",\n  "dependencies": {\n    "react": "^19.1.0"\n  },\n  "packageManager": "pnpm@12.6.0"\n}\n',
     "src-tauri/tauri.conf.json": '{\n  "productName": "Arcus",\n  "version": "0.1.0",\n  "plugins": {\n    "x": {\n      "version": "9.9.9"\n    }\n  }\n}\n',
-    "src-tauri/Cargo.toml": '[package]\nname = "rclone-gui"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\nserde = { version = "1" }\n',
-    "src-tauri/Cargo.lock": '[[package]]\nname = "reqwest"\nversion = "0.13.5"\n\n[[package]]\nname = "rclone-gui"\nversion = "0.1.0"\n',
+    "src-tauri/Cargo.toml": '[package]\nname = "arcus"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\nserde = { version = "1" }\n',
+    "src-tauri/Cargo.lock": '[[package]]\nname = "reqwest"\nversion = "0.13.5"\n\n[[package]]\nname = "arcus"\nversion = "0.1.0"\n',
   };
 
-  it("sets the app's version and nothing else in tauri.conf.json, Cargo.toml and Cargo.lock", () => {
+  it("sets the app's version and nothing else in package.json, tauri.conf.json, Cargo.toml and Cargo.lock", () => {
     for (const [file, pattern] of Object.entries(VERSION_FILES)) {
       expect(readVersion(samples[file], pattern)).toBe("0.1.0");
       const updated = writeVersion(samples[file], pattern, "0.2.0", file);
@@ -107,7 +108,7 @@ describe("version files", () => {
 
   it("agree with each other in this repository", () => {
     const versions = recordedVersions();
-    expect(Object.keys(versions)).toHaveLength(6);
+    expect(Object.keys(versions)).toHaveLength(4);
     expect(new Set(Object.values(versions)).size).toBe(1);
   });
 });

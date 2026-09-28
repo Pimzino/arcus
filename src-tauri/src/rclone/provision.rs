@@ -451,17 +451,17 @@ mod live_tests {
     use crate::paths::AppPaths;
 
     /// Downloads and verifies the real current release. Needs network; run with
-    /// `cargo test -- --ignored provision_live --nocapture` (set RCLONE_GUI_TEST_DIR to keep the result).
+    /// `cargo test -- --ignored provision_live --nocapture` (set ARCUS_TEST_DIR to keep the result).
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
     async fn provision_live() {
-        let base = std::env::var("RCLONE_GUI_TEST_DIR")
+        let base = std::env::var("ARCUS_TEST_DIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| std::env::temp_dir().join(format!("rclone-gui-test-{}", std::process::id())));
+            .unwrap_or_else(|_| std::env::temp_dir().join(format!("arcus-test-{}", std::process::id())));
         let paths = AppPaths::new(base.join("data"), base.join("logs"));
         paths.ensure().unwrap();
         let http = reqwest::Client::builder()
-            .user_agent("rclone-gui-test")
+            .user_agent("Arcus-test")
             .build()
             .unwrap();
         let target = platform::target().unwrap();

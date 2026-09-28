@@ -2,6 +2,8 @@
 // browser (`RCLONE_DEV_RC=http://127.0.0.1:5572 npm run dev`). rc calls are
 // proxied by Vite to a standalone `rclone rcd`; everything else is simulated.
 
+import { emailShim } from "./devShimEmail";
+import { watchShim } from "./devShimWatch";
 import {
   AppError,
   defaultSettings,
@@ -29,8 +31,12 @@ export async function listen(event: string, handler: Listener) {
   };
 }
 
+/** What a command shim returns for a command that is not its own. */
+export const UNHANDLED = Symbol("unhandled");
+export type CommandShim = (cmd: string, args: Record<string, unknown>, emit: (event: string, payload: unknown) => void) => Promise<unknown>;
+
 const RC_BASE = "/__rc";
-const KEY = "rclone-gui-shim";
+const KEY = "arcus-shim";
 
 function loadJson<T>(key: string, fallback: T): T {
   try {
@@ -116,7 +122,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // events. Here every call goes to the one dev rcd, whose log cannot be read, so a transfer's activity
 // is made up from what rc does tell: the files `core/transferred` reports as finished. Folders being
 // created only show in the log; report those by hand to see them, from the browser's console:
-//   __rcloneGuiShim.activity("<daemon id>", "folderCreated", "Mixdowns/Reel 01")
+//   __arcusShim.activity("<daemon id>", "folderCreated", "Mixdowns/Reel 01")
 type ShimDaemon = { id: string; logPath: string | null; group: string | null; seen: Set<string>; seq: number; counts: ActivityCounts; timer: number | null };
 const shimDaemons = new Map<string, ShimDaemon>();
 const noCounts = (): ActivityCounts => ({ foldersCreated: 0, copied: 0, moved: 0, renamed: 0, deleted: 0, foldersRemoved: 0, updated: 0, skipped: 0, notices: 0, errors: 0 });
@@ -180,7 +186,7 @@ async function pollShimDaemon(daemon: ShimDaemon) {
 }
 
 if (import.meta.env.DEV && typeof window !== "undefined") {
-  (window as unknown as { __rcloneGuiShim?: unknown }).__rcloneGuiShim = {
+  (window as unknown as { __arcusShim?: unknown }).__arcusShim = {
     emit,
     /** Report what only rclone's log would show, as the Rust side does. */
     activity(daemonId: string, kind: ActivityKind, path: string | null, message = "", extra: Partial<ActivityEvent> = {}) {
@@ -364,7 +370,13 @@ export async function invoke(cmd: string, args: Record<string, unknown>): Promis
     case "show_in_file_manager":
       console.info(`dev shim: would ${args.mode as string} in the file manager → ${(args.paths as string[]).join(", ")}`);
       return null;
-    default:
+    default: {
+      // Watch folders and email/background commands are simulated in files of their own.
+      for (const shim of [watchShim, emailShim]) {
+        const handled = await shim(cmd, args, emit);
+        if (handled !== UNHANDLED) return handled;
+      }
       throw new AppError({ kind: "shim", message: `dev shim: unknown command ${cmd}` });
+    }
   }
 }

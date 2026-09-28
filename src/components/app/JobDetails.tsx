@@ -130,7 +130,9 @@ function settingsTable(f: TransferForm, def: DefaultLookup): SettingGroup[] {
         bool("Force", f.force),
         bool("Resilient", f.resilient),
         bool("Recover", f.recover),
-        str("Conflict resolution", f.conflictResolve, "None"),
+        str("Conflict resolution", f.conflictResolve, "Keep both"),
+        str("Max delete", f.bisyncMaxDelete ? `${f.bisyncMaxDelete}%` : "", "50%"),
+        ...(f.resync ? [str("When resyncing, keep", f.resyncMode, "Path 1")] : []),
       ],
     });
   }
@@ -146,6 +148,16 @@ function settingsTable(f: TransferForm, def: DefaultLookup): SettingGroup[] {
       rows = [{ label: "_config", value: f.extraConfig, set: true }];
     }
     groups.push({ title: "Advanced overrides", rows });
+  }
+  if (f.extraFilter.trim()) {
+    let rows: SettingRow[];
+    try {
+      const extra = JSON.parse(f.extraFilter) as Record<string, unknown>;
+      rows = Object.entries(extra).map(([k, v]) => ({ label: k, value: typeof v === "object" ? JSON.stringify(v) : String(v), set: true }));
+    } catch {
+      rows = [{ label: "_filter", value: f.extraFilter, set: true }];
+    }
+    groups.push({ title: "Advanced filter", rows });
   }
   return groups;
 }
@@ -348,7 +360,7 @@ export function JobDetailsDialog({ job, onClose }: { job: TrackedJob; onClose: (
         open
         onClose={onClose}
         title={job.title}
-        description={`${operation ?? "Job"} · rclone job #${job.jobid}${job.daemonId ? " · in its own rclone process" : " · on the main rclone daemon"}`}
+        description={`${operation ?? "Job"} · rclone job #${job.jobid}${job.daemonId ? " · in its own rclone process" : " · on the main rclone daemon"}${job.watchId ? ` · Watch folder: ${job.watchName ?? ""}` : ""}`}
         size="lg"
         bodyClassName="flex flex-col gap-4"
         footer={
@@ -378,10 +390,10 @@ export function JobDetailsDialog({ job, onClose }: { job: TrackedJob; onClose: (
                   onClick={() =>
                     void retry(job.id)
                       .then(() => onClose())
-                      .catch((e) => toast({ tone: "danger", title: "Could not restart the job", description: errorMessage(e) }))
+                      .catch((e) => toast({ tone: "danger", title: job.watchId ? "Could not run the watch folder" : "Could not restart the job", description: errorMessage(e) }))
                   }
                 >
-                  Run again
+                  {job.watchId ? "Run the watch folder now" : "Run again"}
                 </Button>
               )
             )}
@@ -406,6 +418,7 @@ export function JobDetailsDialog({ job, onClose }: { job: TrackedJob; onClose: (
             items={[
               { label: job.destination ? "Source" : "Path", value: <PathValue path={job.source} mode="open" icon /> },
               ...(job.destination ? [{ label: "Destination", value: <PathValue path={job.destination} mode="open" icon /> }] : []),
+              ...(job.watchId ? [{ label: "Started by", value: `Watch folder “${job.watchName ?? ""}”`, mono: false }] : []),
               { label: "Started", value: formatDateTime(job.createdAt), mono: false },
               { label: "Finished", value: job.finishedAt ? formatDateTime(job.finishedAt) : isRunning ? "still running" : "–", mono: false },
               {

@@ -1,6 +1,6 @@
 name: Release
 
-# A version tag, pushed by `npm run release` (see README "Releases"), tests the commit, builds the bundles
+# A version tag, pushed by `pnpm release` (see README "Releases"), tests the commit, builds the bundles
 # (macOS, Windows, and Linux, whose AppImage must first pass the end-to-end test) and publishes them as a GitHub release whose notes are that version's CHANGELOG.md section: the release is
 # drafted first, each bundle job attaches its files, and it is published only once every bundle is there.
 # Everyday pushes and pull requests are ci.yml's job.
@@ -58,17 +58,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # pnpm at the version package.json pins (packageManager), with its store cached.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          cache: true
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
-          cache: npm
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: ${{ matrix.target }}
       - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: src-tauri
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
       - name: Build the bundles
         shell: bash
         env:
@@ -87,7 +90,7 @@ jobs:
             export APPLE_SIGNING_IDENTITY="$SECRET_APPLE_SIGNING_IDENTITY" APPLE_ID="$SECRET_APPLE_ID"
             export APPLE_PASSWORD="$SECRET_APPLE_PASSWORD" APPLE_TEAM_ID="$SECRET_APPLE_TEAM_ID"
           fi
-          npm run tauri build -- --target ${{ matrix.target }}
+          pnpm tauri build --target ${{ matrix.target }}
       - name: Attach the bundles to the release
         shell: bash
         env:
@@ -111,10 +114,13 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # pnpm at the version package.json pins (packageManager), with its store cached.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          cache: true
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
-          cache: npm
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
       - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
@@ -124,12 +130,12 @@ jobs:
       - name: Linux build deps, WebKitWebDriver and a virtual display
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf file libfuse2 rpm webkit2gtk-driver xvfb
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf file libfuse2 rpm webkit2gtk-driver xvfb
       - name: tauri-driver
         run: cargo install tauri-driver --locked
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
       - name: Build the bundles
-        run: npm run tauri build -- --bundles appimage,deb,rpm
+        run: pnpm tauri build --bundles appimage,deb,rpm
       - name: Use the AppImage like a first-time user
         # The file people download, not just the binary inside it; a failure here keeps the Linux bundles,
         # and so the whole release, from being published.
@@ -140,11 +146,11 @@ jobs:
           ARCUS_BIN="${appimage[0]}" xvfb-run -a node e2e/linux.mjs
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
-      - name: Keep the screenshots
+      - name: Keep the screenshots, emails and report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: linux-release-screenshots
+          name: linux-release-e2e-artifacts
           path: e2e/artifacts/
           if-no-files-found: ignore
       - name: Attach the bundles to the release

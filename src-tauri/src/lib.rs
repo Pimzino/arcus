@@ -5,13 +5,16 @@
 //! remote-control API to the webview. All rclone functionality is reached through
 //! that API (`rc_call`/`rc_stream`); what a transfer logs is passed on as activity events.
 
+mod background;
 mod commands;
+mod email;
 mod error;
 mod file_manager;
 mod macos;
 mod paths;
 mod rclone;
 mod settings;
+mod watch;
 
 use error::AppError;
 use paths::AppPaths;
@@ -29,6 +32,10 @@ pub struct AppState {
     pub daemon: Daemon,
     pub transfer_daemons: TransferDaemons,
     pub install_lock: tokio::sync::Mutex<()>,
+    /// Watch folders: their rules, watchers and runs (`watch/`).
+    pub watch: watch::WatchEngine,
+    /// What the email notifier last did (`email.rs`).
+    pub email: email::EmailState,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -42,6 +49,11 @@ pub fn run() {
     }
 
     let app = tauri::Builder::default()
+        // First, so a second launch hands over to this copy before anything else starts: two copies
+        // would each run rclone, and the second one's start would stop the first one's daemon.
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            background::on_second_instance(app, args);
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -50,7 +62,7 @@ pub fn run() {
                 .targets([
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
-                        file_name: Some("rclone-gui".into()),
+                        file_name: Some("arcus".into()),
                     }),
                 ])
                 .build(),
@@ -62,7 +74,7 @@ pub fn run() {
             paths.ensure()?;
             let settings = settings::load(&paths.settings_file);
             let http = reqwest::Client::builder()
-                .user_agent(format!("rclone-gui/{}", env!("CARGO_PKG_VERSION")))
+                .user_agent(format!("Arcus/{}", env!("CARGO_PKG_VERSION")))
                 .connect_timeout(Duration::from_secs(20))
                 .build()?;
             app.manage(AppState {
@@ -72,7 +84,10 @@ pub fn run() {
                 daemon: Daemon::default(),
                 transfer_daemons: TransferDaemons::default(),
                 install_lock: tokio::sync::Mutex::new(()),
+                watch: watch::WatchEngine::default(),
+                email: email::EmailState::default(),
             });
+            background::setup(app)?;
 
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -99,8 +114,12 @@ pub fn run() {
             });
 
             tauri::async_runtime::spawn(prune_transfer_logs(app.handle().clone()));
+            watch::start(app.handle().clone());
+            // The tray was made before the watch rules were loaded; show their paused state now.
+            background::refresh_tray(app.handle());
             Ok(())
         })
+        .on_window_event(background::on_window_event)
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::settings_get,
@@ -128,11 +147,25 @@ pub fn run() {
             commands::mac_open_privacy_settings,
             commands::legacy_app_installs,
             commands::trash_legacy_app,
+            background::background_status,
+            email::email_status,
+            email::email_set_password,
+            email::email_send_test,
+            email::notify_transfer_finished,
+            watch::watch_list,
+            watch::watch_save,
+            watch::watch_delete,
+            watch::watch_run_now,
+            watch::watch_stop,
+            watch::watch_set_paused,
+            watch::watch_history,
+            watch::watch_jobs,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
     app.run(|app_handle, event| {
+        background::on_run_event(app_handle, &event);
         if let tauri::RunEvent::Exit = event {
             let state = app_handle.state::<AppState>();
             tauri::async_runtime::block_on(async {

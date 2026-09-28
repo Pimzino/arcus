@@ -1,0 +1,9 @@
+# pnpm settings for this repo (a single package; there is no workspace).
+#
+# Newly published versions are the usual window for a hijacked package, so none younger than a day is
+# installed. pnpm 11+ already defaults to this; it is spelled out so a change of default cannot drop it.
+minimumReleaseAge: 1440
+
+# Dependency install scripts stay blocked (pnpm's default, with strictDepBuilds failing the install when
+# an unreviewed one appears). A package goes in here only when it truly needs its script, with the reason.
+allowBuilds: {}

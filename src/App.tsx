@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from "react";
+import { EmailFailureToasts } from "./components/app/EmailFailureToasts";
 import { LegacyAppNotice } from "./components/app/LegacyApp";
 import { Sidebar } from "./components/app/Sidebar";
 import { StatusBar } from "./components/app/StatusBar";
@@ -11,10 +12,12 @@ import { RemotesPage } from "./pages/Remotes";
 import { SettingsPage } from "./pages/Settings";
 import { SetupPage } from "./pages/Setup";
 import { TransfersPage } from "./pages/Transfers";
+import { WatchPage } from "./pages/Watch";
 import { useAppStore, type Page } from "./store/app";
 import { useJobsStore } from "./store/jobs";
+import { useWatchStore } from "./store/watch";
 
-const SHORTCUTS: Record<string, Page> = { "1": "explorer", "2": "remotes", "3": "transfers", "4": "mounts", "5": "console", ",": "settings" };
+const SHORTCUTS: Record<string, Page> = { "1": "explorer", "2": "remotes", "3": "transfers", "4": "watch", "5": "mounts", "6": "console", ",": "settings" };
 
 function NeedsDaemon({ children }: { children: ReactNode }) {
   const state = useAppStore((s) => s.daemon.state);
@@ -56,6 +59,10 @@ function renderPage(page: Page) {
       );
     case "transfers":
       return <TransfersPage />;
+    // Watch folders run in the backend on rclones of their own: the list needs no main daemon (its
+    // editor's remote pickers do, and say so).
+    case "watch":
+      return <WatchPage />;
     case "mounts":
       return (
         <NeedsDaemon>
@@ -78,10 +85,22 @@ export default function App() {
   const daemonState = useAppStore((s) => s.daemon.state);
   const hydrateJobs = useJobsStore((s) => s.hydrate);
   const reconcileJobs = useJobsStore((s) => s.reconcile);
+  const loadWatches = useWatchStore((s) => s.load);
 
   useEffect(() => {
     void init();
   }, [init]);
+
+  // The job list loads as soon as the app is up: watch folders run their transfers without the main
+  // daemon, so they have to show even when it is not running. Checking which of its own jobs survived
+  // needs the daemon, so that waits for it.
+  useEffect(() => {
+    if (ready && !initError) {
+      void hydrateJobs();
+      // The sidebar's badge counts rules in trouble, so the list is followed from the start.
+      void loadWatches();
+    }
+  }, [ready, initError, hydrateJobs, loadWatches]);
 
   useEffect(() => {
     if (daemonState === "running") void hydrateJobs().then(() => reconcileJobs());
@@ -122,6 +141,7 @@ export default function App() {
       </div>
       <StatusBar />
       <LegacyAppNotice />
+      <EmailFailureToasts />
       <ToastViewport />
     </div>
   );

@@ -18,6 +18,7 @@ export type Page =
   | "explorer"
   | "remotes"
   | "transfers"
+  | "watch"
   | "mounts"
   | "console"
   | "settings";

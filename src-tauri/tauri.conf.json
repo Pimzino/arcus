@@ -4,9 +4,9 @@
   "version": "0.6.1",
   "identifier": "com.rclonegui.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -22,6 +22,7 @@
         "hiddenTitle": true,
         "dragDropEnabled": false,
         "backgroundThrottling": "disabled",
+        "visible": false,
         "trafficLightPosition": {
           "x": 14,
           "y": 17
@@ -52,10 +53,10 @@
     },
     "linux": {
       "deb": {
-        "recommends": ["fuse3", "xdg-utils"]
+        "recommends": ["fuse3", "xdg-utils", "libayatana-appindicator3-1"]
       },
       "rpm": {
-        "recommends": ["fuse3", "xdg-utils"]
+        "recommends": ["fuse3", "xdg-utils", "libayatana-appindicator-gtk3"]
       }
     },
     "windows": {

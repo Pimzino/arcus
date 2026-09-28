@@ -141,6 +141,219 @@ export type Settings = {
   transferLogCleanupIntervalHours: number;
   /** Whether the app also checks for old transfer logs when it starts. */
   transferLogCleanupOnStart: boolean;
+  /** Closing the window keeps Arcus running in the tray / menu bar. */
+  runInBackground: boolean;
+  /** Start Arcus hidden in the tray when the user logs in. */
+  launchAtLogin: boolean;
+  /** SMTP settings; the password is stored apart (`api.emailSetPassword`) and never read back. */
+  email: EmailSettings;
+};
+
+export type NotifyPolicy = "never" | "failure" | "always";
+
+export type EmailSettings = {
+  enabled: boolean;
+  host: string;
+  port: number;
+  /** `starttls` (usually 587), `tls` (implicit TLS, usually 465) or `none` (plain; local relays only). */
+  security: "starttls" | "tls" | "none";
+  /** Empty: the server takes mail without signing in. */
+  username: string;
+  fromAddress: string;
+  toAddresses: string[];
+  /** Which transfers started by hand send an email when they end. Watch folders have their own policy. */
+  notifyTransfers: NotifyPolicy;
+  attachLogOnFailure: boolean;
+};
+
+export const defaultEmailSettings: EmailSettings = {
+  enabled: false,
+  host: "",
+  port: 587,
+  security: "starttls",
+  username: "",
+  fromAddress: "",
+  toAddresses: [],
+  notifyTransfers: "failure",
+  attachLogOnFailure: true,
+};
+
+export type EmailStatus = { passwordSet: boolean; lastSentAtUnix: number | null; lastError: string | null };
+
+/** How a job ended, for an email about it (see src-tauri email.rs). */
+export type JobReport = {
+  title: string;
+  kind: string;
+  source: string;
+  destination: string;
+  status: "success" | "error" | "stopped" | "lost";
+  error: string | null;
+  /** Several lines: the same text as the log's "Arcus summary" block. */
+  summary: string;
+  logPath: string | null;
+  /** "Transfer started by hand" or "Watch folder “<name>”". */
+  origin: string;
+  startedAtUnix: number;
+  finishedAtUnix: number;
+};
+
+export type BackgroundStatus = {
+  /** The OS launch-at-login entry for this copy of Arcus is in place. */
+  launchAtLoginRegistered: boolean;
+  /** This run was started hidden by that entry. */
+  launchedInBackground: boolean;
+  /** A tray / menu bar icon is showing. */
+  trayAvailable: boolean;
+};
+
+export type WatchAction = "copy" | "sync" | "move" | "bisync" | "check";
+
+export type WatchRule = {
+  /** Empty for a new rule; the backend assigns it. */
+  id: string;
+  name: string;
+  enabled: boolean;
+  action: WatchAction;
+  /** Local absolute path or `remote:path`. */
+  source: string;
+  destination: string;
+  /** Run when something in the source changes (local sources only). */
+  onChange: boolean;
+  /** Wait this long after the last change before running. */
+  settleSeconds: number;
+  /** Also run every N minutes (any source); null: never. */
+  intervalMinutes: number | null;
+  /** Run once when Arcus starts, which picks up changes made while it was closed. */
+  runOnStart: boolean;
+  /** rclone exclude patterns, e.g. `*.tmp`, `.DS_Store`; the watcher ignores changes to these too. */
+  excludes: string[];
+  /** Rules saved before `filter` existed; the backend moves it into `filter.MinAge` on save. */
+  minAgeSeconds: number | null;
+  createEmptySrcDirs: boolean;
+  /** move only */
+  deleteEmptySrcDirs: boolean;
+  /** check only: only look for source files missing or different at the destination */
+  oneWay: boolean;
+  bwlimit: string | null;
+  /** rclone `_config` for every run, as the transfer dialog builds it. */
+  config: Record<string, unknown>;
+  /** rclone `_filter` besides `excludes` (IncludeRule, MinSize, MinAge…). */
+  filter: Record<string, unknown>;
+  /** check only: compare by downloading both sides */
+  download: boolean;
+  /** bisync only */
+  checkAccess: boolean;
+  force: boolean;
+  resilient: boolean;
+  recover: boolean;
+  /** bisync only: "" (keep both), newer, older, larger, smaller, path1, path2 */
+  conflictResolve: string;
+  /** bisync only: stop when a run would delete more than this percentage of one side's files */
+  maxDeletePercent: number;
+  /** bisync only: which version wins during a resync (the first run) */
+  resyncMode: string;
+  /** bisync only, kept by the backend: the paths bisync has listings of. While it does not name the rule's paths, runs resync. */
+  bisyncBaseline: string;
+  /** bisync only, sent on save and never returned: the next run resyncs. */
+  resyncNextRun?: boolean;
+  /** `default` follows Settings → Transfers & logs; `off` keeps no log file. */
+  log: "default" | "off" | "DEBUG" | "INFO" | "NOTICE" | "ERROR";
+  notify: NotifyPolicy;
+  createdAtUnix: number;
+};
+
+export const defaultWatchRule: WatchRule = {
+  id: "",
+  name: "",
+  enabled: true,
+  action: "copy",
+  source: "",
+  destination: "",
+  onChange: true,
+  settleSeconds: 30,
+  intervalMinutes: null,
+  runOnStart: true,
+  excludes: [],
+  minAgeSeconds: null,
+  createEmptySrcDirs: true,
+  deleteEmptySrcDirs: false,
+  oneWay: true,
+  bwlimit: null,
+  config: {},
+  filter: {},
+  download: false,
+  checkAccess: false,
+  force: false,
+  resilient: true,
+  recover: true,
+  conflictResolve: "",
+  maxDeletePercent: 50,
+  resyncMode: "newer",
+  bisyncBaseline: "",
+  log: "default",
+  notify: "failure",
+  createdAtUnix: 0,
+};
+
+export type WatchRunStatus = "running" | "success" | "error" | "stopped" | "lost";
+
+export type WatchRun = {
+  id: string;
+  watchId: string;
+  trigger: "change" | "interval" | "start" | "manual";
+  startedAtUnix: number;
+  finishedAtUnix: number | null;
+  status: WatchRunStatus;
+  error: string | null;
+  daemonId: string | null;
+  jobid: number | null;
+  logPath: string | null;
+  bytes: number;
+  transfers: number;
+  checks: number;
+  deletes: number;
+  errors: number;
+};
+
+export type WatchState = "idle" | "waiting" | "running" | "disabled" | "paused" | "error";
+
+export type WatchStatus = {
+  rule: WatchRule;
+  state: WatchState;
+  /** Why the state is `error` (the source folder is gone, say), or other detail worth showing. */
+  stateDetail: string | null;
+  /** When a change-triggered run will start, while its settle timer runs. */
+  runAtUnix: number | null;
+  nextIntervalAtUnix: number | null;
+  lastRun: WatchRun | null;
+  running: WatchRun | null;
+};
+
+export type WatchList = { paused: boolean; watches: WatchStatus[] };
+
+/** A watch folder's transfer as the job list shows it; upserted by `daemonId` (`watch:job` events). */
+export type WatchJob = {
+  watchId: string;
+  watchName: string;
+  runId: string;
+  daemonId: string;
+  jobid: number;
+  group: string;
+  kind: WatchAction;
+  title: string;
+  source: string;
+  destination: string;
+  rcPath: string;
+  params: Record<string, unknown>;
+  logPath: string | null;
+  logLevel: string | null;
+  bwlimit: string | null;
+  createdAtMs: number;
+  finishedAtMs: number | null;
+  status: WatchRunStatus;
+  error: string | null;
+  stats: CoreStats | null;
+  activity: ActivityBatch | null;
 };
 
 export const defaultSettings: Settings = {
@@ -162,6 +375,9 @@ export const defaultSettings: Settings = {
   transferLogRetentionDays: 30,
   transferLogCleanupIntervalHours: 24,
   transferLogCleanupOnStart: true,
+  runInBackground: false,
+  launchAtLogin: false,
+  email: defaultEmailSettings,
 };
 
 export type InstalledRclone = {

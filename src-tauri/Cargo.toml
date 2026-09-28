@@ -1,5 +1,5 @@
 [package]
-name = "rclone-gui"
+name = "arcus"
 version = "0.6.1"
 description = "Cross-platform desktop GUI for rclone"
 authors = ["Pimzino"]
@@ -10,14 +10,18 @@ rust-version = "1.85"
 [lib]
 # The `_lib` suffix keeps the lib name unique so it does not clash with the bin
 # name on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "rclone_gui_lib"
+name = "arcus_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# `tray-icon`: the tray / menu bar icon that keeps Arcus reachable while it runs in the background (background.rs).
+tauri = { version = "2", features = ["tray-icon"] }
+# A second launch hands over to the running copy instead of starting its own rclone (background.rs).
+# 2.4.5 lets the running copy bring its window to the front on Windows; 2.5 needs tauri 2.12.
+tauri-plugin-single-instance = { version = "~2.4.5", default-features = false }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-log = "2"
@@ -33,6 +37,12 @@ pgp = { version = "0.20", default-features = false }
 zip = { version = "8", default-features = false, features = ["deflate"] }
 thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
+# Watch folders (watch/): file system events (FSEvents on macOS, ReadDirectoryChangesW on Windows,
+# inotify on Linux). `macos_fsevent` is the crate's only default feature; it is named so that turning
+# off defaults cannot silently drop the macOS backend. Debouncing is done in watch/, not by a debouncer crate.
+notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
+# Email notifications (email.rs): async SMTP on tokio with the same native-tls the app's reqwest uses.
+lettre = { version = "0.11.23", default-features = false, features = ["smtp-transport", "builder", "tokio1", "tokio1-native-tls"] }
 
 # Asking the workspace whether a folder is a package (an `.app` bundle and friends), so
 # that "show in Finder" never launches one. Same crates and features the opener plugin uses.

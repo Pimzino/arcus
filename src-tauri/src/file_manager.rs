@@ -212,7 +212,7 @@ mod tests {
     /// A folder of our own under the system temp directory; each test creates it if it
     /// needs it to exist.
     fn scratch() -> PathBuf {
-        std::env::temp_dir().join(format!("rclone-gui-show-{}", uuid::Uuid::new_v4().simple()))
+        std::env::temp_dir().join(format!("arcus-show-{}", uuid::Uuid::new_v4().simple()))
     }
 
     fn text(path: &Path) -> String {

@@ -1,9 +1,10 @@
-import { ArrowLeftRight, Cloud, Download, FolderOpen, HardDrive, Settings2, ShieldCheck, Terminal } from "lucide-react";
+import { ArrowLeftRight, Cloud, Download, FolderOpen, FolderSync, HardDrive, Settings2, ShieldCheck, Terminal } from "lucide-react";
 import { type ReactNode } from "react";
 import { dragRegion } from "../../lib/native";
 import { isTauri } from "../../lib/tauri";
 import { selectMacPermissionsPending, useAppStore, type Page } from "../../store/app";
 import { selectRunningCount, useJobsStore } from "../../store/jobs";
+import { selectWatchErrorCount, useWatchStore } from "../../store/watch";
 import { Badge, Kbd, cn, type Tone } from "../ui";
 import { BrandLockup } from "./Brand";
 
@@ -11,8 +12,9 @@ export const NAV: { page: Page; label: string; icon: ReactNode; shortcut: string
   { page: "explorer", label: "Explorer", icon: <FolderOpen />, shortcut: "1" },
   { page: "remotes", label: "Remotes", icon: <Cloud />, shortcut: "2" },
   { page: "transfers", label: "Transfers", icon: <ArrowLeftRight />, shortcut: "3" },
-  { page: "mounts", label: "Mounts", icon: <HardDrive />, shortcut: "4" },
-  { page: "console", label: "Console", icon: <Terminal />, shortcut: "5" },
+  { page: "watch", label: "Watch folders", icon: <FolderSync />, shortcut: "4" },
+  { page: "mounts", label: "Mounts", icon: <HardDrive />, shortcut: "5" },
+  { page: "console", label: "Console", icon: <Terminal />, shortcut: "6" },
   { page: "settings", label: "Settings", icon: <Settings2 />, shortcut: "," },
 ];
 
@@ -26,6 +28,7 @@ export function Sidebar() {
   const daemonState = useAppStore((s) => s.daemon.state);
   const info = useAppStore((s) => s.info);
   const running = useJobsStore(selectRunningCount);
+  const watchErrors = useWatchStore(selectWatchErrorCount);
   const isMac = info?.os === "macos";
   const showSetup = daemonState !== "running" && daemonState !== "starting";
   const permissionsPending = useAppStore(selectMacPermissionsPending);
@@ -61,7 +64,8 @@ export function Sidebar() {
             icon={item.icon}
             label={item.label}
             shortcut={`${modKey()}${item.shortcut}`}
-            badge={item.page === "transfers" && running > 0 ? running : undefined}
+            badge={item.page === "transfers" && running > 0 ? running : item.page === "watch" && watchErrors > 0 ? watchErrors : undefined}
+            badgeTone={item.page === "watch" ? "warning" : "accent"}
           />
         ))}
       </nav>
@@ -84,6 +88,7 @@ function NavItem({
   label,
   shortcut,
   badge,
+  badgeTone = "accent",
   tone,
 }: {
   active: boolean;
@@ -92,6 +97,8 @@ function NavItem({
   label: string;
   shortcut?: string;
   badge?: number;
+  /** The Transfers count is news (accent); the watch folders' count is of rules in trouble (warning). */
+  badgeTone?: Tone;
   tone?: Tone;
 }) {
   return (
@@ -114,7 +121,7 @@ function NavItem({
       </span>
       <span className="flex-1 truncate">{label}</span>
       {badge !== undefined && (
-        <Badge tone="accent" size="sm" className="tnum">
+        <Badge tone={badgeTone} size="sm" className="tnum">
           {badge}
         </Badge>
       )}

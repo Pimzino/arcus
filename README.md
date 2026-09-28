@@ -81,6 +81,14 @@ Your rclone config is rclone's own file and is not touched either.
   everything it did, and re-runs as they were, as another operation or with changes.
 * **A log per transfer.** Each transfer runs in an rclone of its own and keeps that rclone's log, cleaned up
   after 30 days by default.
+* **Watch folders:** copy, sync, move, bisync or check a folder by itself when something in it changes, on a
+  schedule, or when Arcus starts, with every option of the transfer dialog (filters, comparison and safety,
+  performance, bisync's own, raw rclone overrides, dry run), a settle time before each run and a history of
+  runs. A bisync watches both folders and resyncs by itself on its first run. Their transfers appear on the
+  Transfers page like any other.
+* **Email notifications** over SMTP (STARTTLS, SSL/TLS or plain) when transfers you start, or watch folders,
+  finish or fail, with the log attached to a failure. The password is kept in a file of its own, readable
+  only by you, and never shown again.
 * **Mounts** with VFS cache settings.
 * **Console:** run any rclone command with streamed output, or call any rc method with JSON parameters.
 * **Show in Finder, File Explorer or your Linux file manager** for anything on this computer the app shows. Files are revealed in their
@@ -88,6 +96,27 @@ Your rclone config is rclone's own file and is not touched either.
 * **macOS permissions guide** for Full Disk Access, the protected folders, FUSE and the local network.
 * **Verified rclone:** the official binary, checked against rclone's PGP-signed checksums and kept private to
   the app. Pin a version or use your own binary, and edit any global rclone option, in Settings.
+
+### Running in the background
+
+Turn on **Settings → Background → Keep running when the window is closed** and closing the window only hides
+it: Arcus stays in the menu bar (macOS) or the system tray (Windows, Linux), so watch folders and transfers
+carry on. The icon's menu opens the window again, shows how many transfers are running, pauses and resumes
+watch folders, and quits Arcus for real (⌘Q does too), which stops anything still running. On macOS a hidden
+Arcus also leaves the Dock and the app switcher; on Windows a left click on the icon opens the window.
+
+**Open at login** adds Arcus to the programs your account starts when you log in, with `--background`, so it
+starts hidden in the tray while the first option is on (and opens its window when it is off). Arcus keeps the
+entry itself and points it at wherever the app is now each time it starts: a LaunchAgent in
+`~/Library/LaunchAgents/com.rclonegui.desktop.plist` on macOS (macOS says a background item was added), the
+`Arcus` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` on Windows, and
+`~/.config/autostart/arcus.desktop` on Linux (the AppImage's own path when you run the AppImage). Turning the
+option off removes it. Only one Arcus runs at a time: starting it again brings the running one to the front.
+
+On Linux the tray needs a desktop with AppIndicator support and the `libayatana-appindicator3-1` library (the
+.deb and .rpm recommend it). GNOME shows tray icons only with an extension such as *AppIndicator and
+KStatusNotifierItem Support*; without one the icon is missing, and starting Arcus again is the way back to a
+hidden window.
 
 ## How it works
 
@@ -146,7 +175,7 @@ colour tokens for the light and dark themes (switched with `data-theme` on `<htm
 empty-state and dialog patterns ported as class recipes into the hand-built components in
 `src/components/ui/`. There is still no component library: Tailwind is only the utility-CSS
 layer, and the icons come from Lucide. The desktop chrome a browser tab has no use for stays:
-the left sidebar (⌘1–5 switch pages, ⌘, opens Settings), the status bar along the bottom of
+the left sidebar (⌘1–6 switch pages, ⌘, opens Settings), the status bar along the bottom of
 the window, and the dual-pane explorer. ⌘N starts a transfer on the Transfers page.
 
 A status bar along the bottom of the window keeps rclone's state in sight: the daemon's
@@ -159,13 +188,15 @@ The mark is an arch of five stones that step from deep to light blue, the way fi
 the other, held together by its keystone: the part rclone plays here. All branding lives in [`branding/`](branding/): the app icon master (`app-icon.png`) and every platform icon
 made from it (`icons/`, which `tauri.conf.json` points the bundle at), the mark, wordmark, lockups and favicon as
 SVG (`svg/`), the typeface (`fonts/`: Sora, under the SIL Open Font License, plus the Latin subset the app uses
-for its large headings) and `brand-sheet.png`. One script, `branding/build.py`, draws all of it from the
+for its large headings), the tray and menu bar icons (`icons/tray.png`, `icons/tray-template.png`) and
+`brand-sheet.png`. One script, `branding/build.py`, draws all of it from the
 geometry and colours at its top, and also writes the React components the app draws its logo with
 (`src/components/app/Brand.tsx`). To change the brand, edit the script and run it:
 
 ```bash
 python3 -m venv .venv-brand && .venv-brand/bin/pip install skia-python fonttools
 .venv-brand/bin/python branding/build.py
+.venv-brand/bin/python branding/build.py --tray   # only the tray and menu bar icons
 ```
 
 The wordmark's typeface, Sora SemiBold, is used for page, section and dialog titles only. All other
@@ -174,18 +205,19 @@ dense tables and keeps the app native on each platform.
 
 ## Development
 
-Prerequisites: Node 20+, Rust stable, and the platform toolchain Tauri needs
+Prerequisites: Node 20+, [pnpm](https://pnpm.io/installation) (the version `packageManager` in
+`package.json` names; npm is not used), Rust stable, and the platform toolchain Tauri needs
 (macOS: Xcode command line tools; Windows: Visual Studio Build Tools with the C++ workload
-and WebView2, which is preinstalled on Windows 10/11; Linux: `libwebkit2gtk-4.1-dev` and
-`librsvg2-dev`, see the CI workflow). See
+and WebView2, which is preinstalled on Windows 10/11; Linux: `libwebkit2gtk-4.1-dev`,
+`libayatana-appindicator3-dev` and `librsvg2-dev`, see the CI workflow). See
 <https://tauri.app/start/prerequisites/>.
 
 ```bash
-npm install
-npm run tauri dev        # desktop app with hot reload
-npm run tauri build      # release bundles in src-tauri/target/release/bundle
-npm run typecheck        # TypeScript
-npm run test:rust        # Rust unit tests (incl. signature verification fixture)
+pnpm install --frozen-lockfile
+pnpm tauri dev           # desktop app with hot reload
+pnpm tauri build         # release bundles in src-tauri/target/release/bundle
+pnpm typecheck           # TypeScript
+pnpm test:rust           # Rust unit tests (incl. signature verification fixture)
 
 # Live end-to-end provisioning test: downloads and verifies the current release
 # into a temp dir (needs network).
@@ -194,7 +226,29 @@ cargo test --manifest-path src-tauri/Cargo.toml -- --ignored provision_live --no
 # checks the activity and the log file. Needs an rclone binary; the one the
 # app installed will do (macOS: ~/Library/Application Support/
 # com.rclonegui.desktop/bin/<version>/rclone).
-RCLONE_GUI_TEST_BINARY=/path/to/rclone cargo test --manifest-path src-tauri/Cargo.toml -- --ignored live_transfer --nocapture
+ARCUS_TEST_BINARY=/path/to/rclone cargo test --manifest-path src-tauri/Cargo.toml -- --ignored live_transfer --nocapture
+# Launch at login: writes the macOS and Linux login entries into a throwaway home
+# (never your own), checks them (plutil on macOS) and leaves them with a report in
+# src-tauri/target/e2e-artifacts/background/.
+cargo test --manifest-path src-tauri/Cargo.toml --lib -- --ignored launch_at_login --nocapture
+# Watch folders: the real engine with real file system events, a real rclone and
+# emails into an in-process SMTP server (copy, sync, move, check, pause, the run
+# limit, stop, a restart from watches.json). About 100 s. Email notifications:
+# the real sending path against the same SMTP server (policies, attachments,
+# readable errors). Artifacts (report.json, the .eml files, the transfer logs)
+# go to src-tauri/target/e2e-artifacts/{watch,email}/, or under
+# $ARCUS_E2E_ARTIFACTS when it is set.
+# live_watch also runs live_watch_options: a watch folder's rclone options
+# (IgnoreExisting, include with exclude, max size, dry run, an option rclone
+# refuses) and bisync (the automatic first resync, a change in either folder,
+# deletions); its artifacts go to e2e-artifacts/watch-options/.
+ARCUS_TEST_BINARY=/path/to/rclone cargo test --manifest-path src-tauri/Cargo.toml --lib -- --ignored live_watch --nocapture
+cargo test --manifest-path src-tauri/Cargo.toml --lib -- --ignored live_email --nocapture
+# Form layout (macOS): the watch folder editor, the transfer dialog and Settings in
+# WebKit at the window's default and minimum sizes; every pair of fields side by
+# side must have its controls level. Screenshots and report.json in
+# e2e/artifacts/form-layout/.
+node e2e/form-layout.mjs
 ```
 
 ### Developing the UI in a browser
@@ -214,11 +268,11 @@ RCLONE_DEV_RC_AUTH=dev:dev
 VITE_DEV_HOME=/Users/you
 ```
 
-Then `npm run dev` and open <http://localhost:1420>. Provisioning and daemon control are
+Then `pnpm dev` and open <http://localhost:1420>. Provisioning and daemon control are
 simulated by `src/lib/devShim.ts` in this mode; rc calls are real. Transfers all run on that one
 daemon, whose log the browser cannot read, so their activity is made up from the files
 `core/transferred` reports as finished. To see anything else, report it from the console:
-`__rcloneGuiShim.activity("<the job's daemonId>", "folderCreated", "Photos/2024")`.
+`__arcusShim.activity("<the job's daemonId>", "folderCreated", "Photos/2024")`.
 
 ### macOS permissions
 
@@ -257,6 +311,7 @@ src-tauri/keys/           rclone release signing keys (verbatim copy of rclone.o
 src-tauri/windows/        NSIS installer hooks (replacing a pre-rename Rclone GUI install)
 scripts/release.mjs       cuts a release: version bump, CHANGELOG.md section, tag (see Releases)
 e2e/linux.mjs             end-to-end test of the real app on Linux, under tauri-driver (see CI)
+e2e/form-layout.mjs       layout test of the forms in WebKit (macOS), with e2e/webkit-probe.swift
 branding/                 logo, icons, fonts and the script that draws them (see Design and brand)
 .github/workflows/        ci.yml (tests), release.yml (bundles for a tag), windows-upgrade.yml
 ```
@@ -274,7 +329,7 @@ branding/                 logo, icons, fonts and the script that draws them (see
 Three workflows in `.github/workflows/`:
 
 * **`ci.yml`** runs on every push to `main` and every pull request: the TypeScript type check, the UI's unit
-  tests (`npm test`) and the Rust tests, and **Linux end-to-end** ([`e2e/linux.mjs`](e2e/linux.mjs)), which
+  tests (`pnpm test`) and the Rust tests, and **Linux end-to-end** ([`e2e/linux.mjs`](e2e/linux.mjs)), which
   builds the app, starts it on a virtual display under `tauri-driver` and uses it like a first-time user:
   it installs and verifies rclone from the Setup page, opens a folder in each explorer pane, copies a file
   across and checks that it arrived, that the transfer wrote its log and that closing the app leaves no
@@ -295,15 +350,15 @@ Three workflows in `.github/workflows/`:
 Releases are cut on request, from an up-to-date `main` with nothing uncommitted:
 
 ```bash
-npm run release -- patch             # 0.1.0 -> 0.1.1; or minor, major, or a version such as 1.0.0
-npm run release -- minor --dry-run   # show the next version and its changelog without changing anything
+pnpm release patch             # 0.1.0 -> 0.1.1; or minor, major, or a version such as 1.0.0
+pnpm release minor --dry-run   # show the next version and its changelog without changing anything
 ```
 
-The command sets the new version in `package.json`, `package-lock.json`, `src-tauri/tauri.conf.json`,
+The command sets the new version in `package.json`, `src-tauri/tauri.conf.json`,
 `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` (the app reports the Cargo version), adds a section to
 [`CHANGELOG.md`](CHANGELOG.md) listing every commit since the previous release with a link to its commit ID,
 commits that as "Release vX.Y.Z", tags the commit and pushes the commit and the tag together. A version that
-has never been released can be released as it is by naming it, e.g. `npm run release -- 0.1.0`.
+has never been released can be released as it is by naming it, e.g. `pnpm release 0.1.0`.
 
 ## Code signing
 
