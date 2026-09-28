@@ -256,7 +256,7 @@ export function WatchEditorDialog({ rule, onClose }: { rule: WatchRule; onClose:
             />
           </Field>
           <Field label="Action">
-            <Segmented options={WATCH_ACTIONS.map((a) => ({ value: a.value, label: a.label }))} value={action} onChange={(v) => setOpt("mode", v)} />
+            <Segmented label="Action" options={WATCH_ACTIONS.map((a) => ({ value: a.value, label: a.label }))} value={action} onChange={(v) => setOpt("mode", v)} />
           </Field>
           <Checkbox
             label="Dry run"
@@ -381,7 +381,7 @@ export function WatchEditorDialog({ rule, onClose }: { rule: WatchRule; onClose:
               </Select>
             </Row>
             <Row title="Email me" description="Sent to the addresses in Settings → Email notifications.">
-              <Segmented size="sm" options={NOTIFY} value={form.notify} onChange={(v) => set("notify", v)} />
+              <Segmented size="sm" label="Email me" options={NOTIFY} value={form.notify} onChange={(v) => set("notify", v)} />
             </Row>
           </div>
           {emailOff && form.notify !== "never" && (

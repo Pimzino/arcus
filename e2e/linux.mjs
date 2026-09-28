@@ -374,15 +374,15 @@ try {
   const enabled = await waitFor("the Send email notifications switch", () => controlFor(email, "Send email notifications", '[role="switch"]'));
   await setSwitch(enabled, true, "email notifications");
   // Security first: choosing None moves the default port to 25, and the port is set after it.
-  const security = await waitFor("the security choice", () => elementIn(email, "select"));
+  const security = await waitFor("the security choice", () => elementIn(email, 'select[aria-label="Security"]'));
   await setValue(security, "none");
   await waitFor("security None to be chosen", async () => (await run("return arguments[0].value;", ref(security))) === "none");
-  await fill(await need("the Mail server field", () => elementIn(email, 'input[placeholder="smtp.example.com"]')), "127.0.0.1");
+  await fill(await need("the Mail server field", () => elementIn(email, 'input[aria-label="Server"]')), "127.0.0.1");
   await fill(await need("the Port field", () => elementIn(email, 'input[aria-label="Port"]')), String(sink.port));
   await fill(await need("the Username field", () => controlFor(email, "Username", "input")), MAIL_USER);
   await fill(await need("the Password field", () => elementIn(email, 'input[type="password"]')), MAIL_PASSWORD);
-  await fill(await need("the From field", () => elementIn(email, 'input[placeholder="arcus@example.com"]')), MAIL_FROM);
-  await fill(await need("the To field", () => elementIn(email, 'textarea[placeholder="you@example.com"]')), MAIL_TO);
+  await fill(await need("the From field", () => elementIn(email, 'input[aria-label="From"]')), MAIL_FROM);
+  await fill(await need("the To field", () => elementIn(email, 'input[aria-label="To"]')), MAIL_TO);
   await screenshot("4-email-settings");
   // It saves the fields and the password first, then sends.
   await click(await waitFor('an enabled "Send test email" button', () => buttonIn(email, "Send test email")));

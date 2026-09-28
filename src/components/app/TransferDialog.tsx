@@ -188,7 +188,7 @@ export function TransferDialog({
       {error && <ErrorMessage error={error} onDismiss={() => setError(null)} />}
 
       <FormSection title="Operation" description={mode.help} collapsible={false}>
-        <Segmented options={MODES.map((m) => ({ value: m.value, label: m.label }))} value={form.mode} onChange={(v) => set("mode", v)} />
+        <Segmented label="Operation" options={MODES.map((m) => ({ value: m.value, label: m.label }))} value={form.mode} onChange={(v) => set("mode", v)} />
       </FormSection>
 
       <FormSection

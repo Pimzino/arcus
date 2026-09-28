@@ -237,16 +237,20 @@ export function Segmented<T extends string>({
   onChange,
   size = "md",
   className,
+  label,
 }: {
   options: { value: T; label: ReactNode; icon?: ReactNode }[];
   value: T;
   onChange: (value: T) => void;
   size?: "sm" | "md";
   className?: string;
+  /** What the choice is about, for assistive technology. */
+  label?: string;
 }) {
   return (
     <div
       role="radiogroup"
+      aria-label={label}
       className={cn(
         "inline-flex w-fit items-center justify-center rounded-lg bg-muted p-[3px] text-muted-foreground",
         size === "sm" ? "h-7" : "h-8",
