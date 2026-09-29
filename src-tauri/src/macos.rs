@@ -9,9 +9,17 @@
 //!
 //! rclone runs as child processes of this app, so macOS attributes their file access to
 //! Arcus: one grant covers the app and rclone alike.
+//!
+//! System Settings only lists an app under a privacy service once the app has tried to use
+//! it: the Full Disk Access probe adds Arcus to that list (switched off), listing a folder
+//! adds it under Files and Folders, and Local Network needs a network operation, which
+//! `request_local_network` performs. macOS remembers every answer against the app's
+//! designated requirement (`code_identity`); an ad-hoc signature's requirement is its
+//! cdhash, which changes with every build, so such a copy loses its grants on each update.
 
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +48,10 @@ pub struct Permissions {
     pub fuse: Vec<FuseInstall>,
     /// The `.app` bundle to add in System Settings, when running from one.
     pub app_path: Option<String>,
+    /// The designated requirement macOS files this copy's privacy answers under (`None`
+    /// outside a bundle). When it differs from the one recorded with an earlier answer,
+    /// macOS has forgotten that answer and will ask again.
+    pub code_identity: Option<String>,
 }
 
 pub fn status(home: &Path, probe_folders: bool) -> Permissions {
@@ -47,11 +59,42 @@ pub fn status(home: &Path, probe_folders: bool) -> Permissions {
         full_disk_access: full_disk_access(home),
         folders: probe_folders.then(|| probe_protected_folders(home)),
         fuse: fuse_installs(),
-        app_path: std::env::current_exe()
-            .ok()
-            .and_then(|exe| bundle_from_exe(&exe))
-            .map(|p| p.to_string_lossy().to_string()),
+        app_path: running_bundle().map(|p| p.to_string_lossy().to_string()),
+        code_identity: code_identity().map(str::to_string),
     }
+}
+
+/// The `.app` bundle this process runs from, if any (not in `tauri dev`).
+fn running_bundle() -> Option<PathBuf> {
+    std::env::current_exe().ok().and_then(|exe| bundle_from_exe(&exe))
+}
+
+/// This copy's designated requirement, read once with codesign: `identifier "…" and
+/// certificate root = H"…"` for the Arcus certificate (the same across versions), or
+/// `cdhash H"…"` for an ad-hoc signature (new with every build).
+pub fn code_identity() -> Option<&'static str> {
+    static IDENTITY: OnceLock<Option<String>> = OnceLock::new();
+    IDENTITY
+        .get_or_init(|| {
+            let bundle = running_bundle()?;
+            let out = std::process::Command::new("/usr/bin/codesign")
+                .args(["--display", "--requirements", "-"])
+                .arg(&bundle)
+                .output()
+                .ok()?;
+            // The requirement goes to stdout, the "Executable=" header to stderr.
+            parse_designated_requirement(&String::from_utf8_lossy(&out.stdout))
+        })
+        .as_deref()
+}
+
+/// codesign prints an ad-hoc signature's requirement, which is implied rather than stored, behind `# `.
+fn parse_designated_requirement(codesign_output: &str) -> Option<String> {
+    codesign_output
+        .lines()
+        .find_map(|line| line.trim().trim_start_matches("# ").strip_prefix("designated => "))
+        .map(|dr| dr.trim().to_string())
+        .filter(|dr| !dr.is_empty())
 }
 
 /// Files that only a process with Full Disk Access may read. Opening them never prompts.
@@ -187,6 +230,124 @@ pub fn move_to_trash(path: &Path) -> Result<(), String> {
 #[cfg(not(target_os = "macos"))]
 pub fn move_to_trash(_path: &Path) -> Result<(), String> {
     Err("moving to the Bin is only done on macOS".into())
+}
+
+/// Make macOS ask about the local network now, which also adds Arcus to System Settings →
+/// Privacy & Security → Local Network. There is no API for this (Apple's TN3179); the
+/// technote's way is to connect a UDP socket to an address on the local network, which
+/// raises the alert without sending anything. Link-local IPv6 addresses are used as in the
+/// technote, IPv4 subnet addresses when an interface has none; port 9 is the discard
+/// service, in case anything were ever sent. Returns how many connects were attempted, so
+/// the caller can tell "no local network at all" apart. A decision already made is kept
+/// and nothing is shown.
+#[cfg(target_os = "macos")]
+pub fn request_local_network() -> usize {
+    use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket};
+
+    let mut v6 = Vec::new();
+    let mut v4 = Vec::new();
+    // SAFETY: getifaddrs fills a linked list that stays valid until freeifaddrs; every
+    // address is read according to its own sa_family.
+    unsafe {
+        let mut list: *mut libc::ifaddrs = std::ptr::null_mut();
+        if libc::getifaddrs(&mut list) != 0 {
+            return 0;
+        }
+        let mut cursor = list;
+        while let Some(ifa) = cursor.as_ref() {
+            cursor = ifa.ifa_next;
+            let flags = ifa.ifa_flags as libc::c_int;
+            let wanted = libc::IFF_UP | libc::IFF_BROADCAST;
+            if flags & wanted != wanted || flags & libc::IFF_LOOPBACK != 0 || ifa.ifa_addr.is_null() {
+                continue;
+            }
+            match (*ifa.ifa_addr).sa_family as libc::c_int {
+                libc::AF_INET6 => {
+                    let sa = &*(ifa.ifa_addr as *const libc::sockaddr_in6);
+                    let ip = Ipv6Addr::from(sa.sin6_addr.s6_addr);
+                    if ip.segments()[0] & 0xffc0 == 0xfe80 {
+                        v6.push((ip, sa.sin6_scope_id));
+                    }
+                }
+                libc::AF_INET if !ifa.ifa_netmask.is_null() => {
+                    let addr = &*(ifa.ifa_addr as *const libc::sockaddr_in);
+                    let mask = &*(ifa.ifa_netmask as *const libc::sockaddr_in);
+                    v4.push((u32::from_be(addr.sin_addr.s_addr), u32::from_be(mask.sin_addr.s_addr)));
+                }
+                _ => {}
+            }
+        }
+        libc::freeifaddrs(list);
+    }
+
+    let mut targets: Vec<SocketAddr> = Vec::new();
+    for (ip, scope) in v6 {
+        for host in [random_u64(), random_u64()] {
+            let mut octets = ip.octets();
+            octets[8..].copy_from_slice(&host.to_be_bytes());
+            targets.push(SocketAddrV6::new(Ipv6Addr::from(octets), 9, 0, scope).into());
+        }
+    }
+    if targets.is_empty() {
+        for (addr, mask) in v4 {
+            if let Some(host) = ipv4_neighbour(addr, mask, random_u64()) {
+                targets.push(SocketAddrV4::new(Ipv4Addr::from(host), 9).into());
+            }
+        }
+    }
+    for target in &targets {
+        let bind: SocketAddr = if target.is_ipv6() { "[::]:0" } else { "0.0.0.0:0" }.parse().unwrap();
+        if let Ok(socket) = UdpSocket::bind(bind) {
+            let _ = socket.connect(target);
+        }
+    }
+    targets.len()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn request_local_network() -> usize {
+    0
+}
+
+/// Some other host on the IPv4 subnet of `addr`/`mask`: never the network or broadcast
+/// address and never `addr` itself. `None` for subnets without such a host (/31, /32).
+fn ipv4_neighbour(addr: u32, mask: u32, random: u64) -> Option<u32> {
+    let hosts = !mask;
+    if hosts < 3 {
+        return None;
+    }
+    let network = addr & mask;
+    // 1..=hosts-1 excludes the network and broadcast addresses.
+    let mut host = 1 + (random as u32) % (hosts - 1);
+    if network | host == addr {
+        host = if host == hosts - 1 { 1 } else { host + 1 };
+    }
+    Some(network | host)
+}
+
+/// A random number for picking addresses nobody uses; not for anything secret.
+fn random_u64() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    std::collections::hash_map::RandomState::new().build_hasher().finish()
+}
+
+/// Open a System Settings deep link with NSWorkspace, as a Mac app does, rather than
+/// through the `open` tool.
+#[cfg(target_os = "macos")]
+pub fn open_settings_url(url: &str) -> Result<(), String> {
+    use objc2_app_kit::NSWorkspace;
+    use objc2_foundation::{NSString, NSURL};
+    let url = NSURL::URLWithString(&NSString::from_str(url)).ok_or_else(|| format!("not a valid link: {url}"))?;
+    if NSWorkspace::sharedWorkspace().openURL(&url) {
+        Ok(())
+    } else {
+        Err("macOS did not open System Settings".into())
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn open_settings_url(_url: &str) -> Result<(), String> {
+    Err("System Settings can only be opened on macOS".into())
 }
 
 /// Deep link into System Settings → Privacy & Security for a pane the guide refers to.

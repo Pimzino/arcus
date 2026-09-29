@@ -592,14 +592,51 @@ pub async fn trash_legacy_app(app: AppHandle, path: String) -> AppResult<()> {
 }
 
 /// Open System Settings → Privacy & Security at one of the panes the guide refers to.
+///
+/// System Settings only lists apps that have tried to use a service, so Arcus tries first:
+/// the Full Disk Access probe puts it in that list (switched off), and a local network
+/// operation makes macOS ask about the local network, which puts it in that one. The
+/// folders are listed once the guide has requested them; the pane is only offered then.
 #[tauri::command]
-pub fn mac_open_privacy_settings(pane: String) -> AppResult<()> {
+pub async fn mac_open_privacy_settings(app: AppHandle, pane: String) -> AppResult<()> {
     if !cfg!(target_os = "macos") {
         return Err(AppError::msg("System Settings can only be opened on macOS"));
     }
     let url = crate::macos::privacy_pane_url(&pane)
         .ok_or_else(|| AppError::msg(format!("unknown privacy pane '{pane}'")))?;
-    tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| AppError::msg(e.to_string()))
+    let home = app.path().home_dir()?;
+    tokio::task::spawn_blocking(move || match pane.as_str() {
+        "fullDiskAccess" => {
+            let status = crate::macos::full_disk_access(&home);
+            log::info!("macOS permissions: Full Disk Access is {status}; opening its settings");
+        }
+        "localNetwork" => {
+            let attempted = crate::macos::request_local_network();
+            log::info!("macOS permissions: tried {attempted} local network addresses; opening Local Network settings");
+        }
+        _ => {}
+    })
+    .await
+    .map_err(|e| AppError::msg(format!("permission check failed: {e}")))?;
+    crate::macos::open_settings_url(url).map_err(AppError::msg)
+}
+
+/// Make macOS ask whether Arcus may use the local network (see `macos::request_local_network`).
+#[tauri::command]
+pub async fn mac_request_local_network() -> AppResult<()> {
+    if !cfg!(target_os = "macos") {
+        return Err(AppError::msg("the local network permission only exists on macOS"));
+    }
+    let attempted = tokio::task::spawn_blocking(crate::macos::request_local_network)
+        .await
+        .map_err(|e| AppError::msg(format!("asking for the local network failed: {e}")))?;
+    log::info!("macOS permissions: asked about the local network ({attempted} addresses tried)");
+    if attempted == 0 {
+        return Err(AppError::msg(
+            "This Mac is not on a local network (Wi-Fi or Ethernet), so macOS has nothing to ask about yet. Connect to one and try again.",
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(all(test, not(windows)))]

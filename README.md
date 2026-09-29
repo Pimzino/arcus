@@ -40,10 +40,12 @@ Get the latest version from the [releases page](https://github.com/Pimzino/arcus
 | Debian, Ubuntu and derivatives | `Arcus_<version>_amd64.deb` |
 | Fedora, openSUSE and derivatives | `Arcus-<version>-1.x86_64.rpm` |
 
-The builds are not code-signed yet, so the system warns the first time:
+The builds are not signed with a certificate the systems know yet, so they warn the first time:
 
-* **macOS:** open Arcus once, then go to System Settings → Privacy & Security and click *Open Anyway*. Releases
-  up to v0.6.0 were not signed at all, so macOS says they are damaged instead; for those, run
+* **macOS:** open Arcus once, then go to System Settings → Privacy & Security and click *Open Anyway*. The Mac
+  builds are signed with Arcus's own certificate, which is not Apple-issued, so macOS cannot verify the developer;
+  the certificate is what lets macOS remember the permissions you give Arcus across updates. Releases up to v0.6.0
+  were not signed at all, so macOS says they are damaged instead; for those, run
   `xattr -dr com.apple.quarantine /Applications/Arcus.app` and open the app again.
 * **Windows:** SmartScreen shows *Windows protected your PC*; click *More info*, then *Run anyway*.
 
@@ -298,13 +300,26 @@ daemon, whose log the browser cannot read, so their activity is made up from the
 ### macOS permissions
 
 macOS attributes everything rclone does to the app that started it, so the app asks for
-the permissions on rclone's behalf: Full Disk Access (recommended, granted manually in
-System Settings → Privacy & Security), the per-folder prompts for Desktop, Documents and
-Downloads (the app can trigger them on request), a FUSE layer for mounts and the
-local-network prompt. The guide is shown once on first run and stays available under
-Settings → macOS permissions. Grants are tied to the app's code signature: a local build
-that is not signed with a Developer ID is ad-hoc signed with a hash that changes every
-build, so expect to grant Full Disk Access again after rebuilding.
+the permissions on rclone's behalf: Full Disk Access (recommended, switched on in System
+Settings → Privacy & Security), the per-folder prompts for Desktop, Documents and Downloads,
+the local-network prompt and a FUSE layer for mounts. On a new install the guide comes first,
+before the explorer lists a folder, so macOS only asks when a button in the guide is pressed;
+it stays available under Settings → macOS permissions.
+
+macOS lists an app under a privacy service only once the app has tried to use it, so the
+guide's buttons try first: Open Full Disk Access reads a file only Full Disk Access may open
+(Arcus then appears in that list, switched off), Ask for access lists the three folders
+(one macOS prompt each) and, for the local network, connects a UDP socket to a link-local
+address as Apple's TN3179 describes (no traffic is sent). The prompts' texts come from
+`src-tauri/Info.plist`.
+
+macOS remembers every answer against the app's designated requirement. Release builds are
+signed with the Arcus certificate (see Code signing), so the requirement, and with it every
+permission, carries over from one release to the next. An ad-hoc signed build (a local
+`tauri build` without the certificate) is identified by its cdhash, new with every build, so
+macOS forgets its permissions on each rebuild; the guide says so, and when a start finds that
+the guide was finished under another identity and Full Disk Access is gone, it shows the guide
+again before anything else.
 
 ### Project layout
 
@@ -394,9 +409,18 @@ installed. Local builds make no update files (`bundle.createUpdaterArtifacts` is
 
 ## Code signing
 
-The release builds are unsigned for macOS (Apple Silicon and Intel) and Windows. To sign them, set the
-`APPLE_*` secrets used in `.github/workflows/release.yml` for macOS signing and notarization (the build
-passes them to Tauri only once `APPLE_CERTIFICATE` is set, so unsigned builds keep working until then), and
+The Mac builds are signed with the Arcus certificate, a self-signed code-signing certificate (valid to 2046)
+whose `.p12` and password are the `MACOS_SIGNING_CERTIFICATE` (base64) and
+`MACOS_SIGNING_CERTIFICATE_PASSWORD` secrets; the maintainer's copy is in `~/.tauri/arcus-codesign.p12`.
+`scripts/macos-signing-keychain.sh` imports it into a keychain of its own for the build, and the release
+fails if a Mac app comes out without it. It gives every release the same designated requirement,
+`identifier "com.rclonegui.desktop" and certificate root = H"e60b1b8bbe0189c07b643ce31d3419e9944552d9"`,
+so macOS keeps the permissions users gave Arcus across updates. Keep the certificate: a new one changes the
+requirement, and every user would have to grant the permissions again once.
+
+For signing and notarization with an Apple Developer ID instead, set the `APPLE_*` secrets used in
+`.github/workflows/release.yml` (the build passes them to Tauri only once `APPLE_CERTIFICATE` is set, and they
+take precedence over the Arcus certificate); that changes the requirement once too. Windows builds are unsigned;
 add a Windows code-signing certificate following <https://tauri.app/distribute/>.
 
 ## Roadmap

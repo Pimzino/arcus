@@ -4,6 +4,7 @@ import { LegacyAppNotice } from "./components/app/LegacyApp";
 import { Sidebar } from "./components/app/Sidebar";
 import { StatusBar } from "./components/app/StatusBar";
 import { UpdatePrompt } from "./components/app/Update";
+import { runE2eSteps } from "./lib/e2eDriver";
 import { listen } from "./lib/tauri";
 import { Button, EmptyState, ErrorMessage, Spinner, ToastViewport } from "./components/ui";
 import { ConsolePage } from "./pages/Console";
@@ -103,6 +104,11 @@ export default function App() {
       void loadWatches();
     }
   }, [ready, initError, hydrateJobs, loadWatches]);
+
+  // An end-to-end test's own steps (debug builds only; see e2eDriver.ts).
+  useEffect(() => {
+    if (ready && !initError) void runE2eSteps();
+  }, [ready, initError]);
 
   useEffect(() => {
     if (daemonState === "running") void hydrateJobs().then(() => reconcileJobs());

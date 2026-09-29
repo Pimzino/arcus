@@ -2,7 +2,7 @@ import { FolderOpen, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../lib/tauri";
 import { errorMessage } from "../../lib/types";
-import { useAppStore } from "../../store/app";
+import { selectMacPermissionsPending, useAppStore } from "../../store/app";
 import { Button, Dialog, ErrorMessage, toast } from "../ui";
 import { useFileManager } from "./FileManager";
 
@@ -17,6 +17,8 @@ const DISMISSED_KEY = "legacyAppDismissed";
  */
 export function LegacyAppNotice() {
   const isMac = useAppStore((s) => s.info?.os === "macos");
+  // Not over the permissions guide: it waits until the guide is done.
+  const guideUp = useAppStore(selectMacPermissionsPending);
   const fm = useFileManager();
   const [paths, setPaths] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -60,7 +62,7 @@ export function LegacyAppNotice() {
 
   return (
     <Dialog
-      open={paths.length > 0}
+      open={paths.length > 0 && !guideUp}
       onClose={() => void keep()}
       title="Rclone GUI is now Arcus"
       description="Same app, new name. Your settings, rclone downloads and transfer history came across as they were."

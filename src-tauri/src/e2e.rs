@@ -7,6 +7,8 @@
 //! - `ARCUS_E2E_QUIT_AFTER_UPDATE=1`: quit once an automatic check has found nothing, or an install failed.
 //! - `ARCUS_E2E_TRAY_DUMP=<file>`: every tray menu the app works out is appended to the file (JSON lines).
 //! - `ARCUS_E2E_QUIT_WHEN_RUNNING_MS=<n>`: quit n ms after the tray first shows a transfer with statistics.
+//! - `ARCUS_E2E_UI=<JSON array>`: steps the page performs by itself once it is up, such as pressing a button
+//!   (`src/lib/e2eDriver.ts`); `ARCUS_E2E_UI_REPORT=<file>` gets what they saw, as JSON lines.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -63,4 +65,23 @@ pub fn transfer_running(app: &AppHandle) {
         log::info!("e2e: quit requested at {} ms", crate::rclone::daemon::now_unix_ms());
         app.exit(0);
     });
+}
+
+/// The page's own steps for the test (`ARCUS_E2E_UI`), or nothing: always nothing in a release build.
+#[tauri::command]
+pub fn e2e_ui_steps() -> Option<serde_json::Value> {
+    serde_json::from_str(&var("ARCUS_E2E_UI")?).ok()
+}
+
+/// One line of what the page's steps saw, appended to `ARCUS_E2E_UI_REPORT`.
+#[tauri::command]
+pub fn e2e_ui_report(entry: serde_json::Value) {
+    let Some(path) = var("ARCUS_E2E_UI_REPORT") else {
+        return;
+    };
+    let line = serde_json::json!({ "atMs": crate::rclone::daemon::now_unix_ms(), "entry": entry });
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{line}");
+    }
 }

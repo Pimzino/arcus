@@ -87,6 +87,10 @@ jobs:
           SECRET_APPLE_ID: ${{ secrets.APPLE_ID }}
           SECRET_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           SECRET_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # The Arcus certificate (scripts/macos-signing-keychain.sh): the same signature identity for every release,
+          # so macOS keeps users' privacy permissions across updates.
+          MACOS_SIGNING_CERTIFICATE: ${{ secrets.MACOS_SIGNING_CERTIFICATE }}
+          MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
           # Signs the update files (bundle.createUpdaterArtifacts, switched on for release builds only).
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -101,8 +105,25 @@ jobs:
             export APPLE_CERTIFICATE="$SECRET_APPLE_CERTIFICATE" APPLE_CERTIFICATE_PASSWORD="$SECRET_APPLE_CERTIFICATE_PASSWORD"
             export APPLE_SIGNING_IDENTITY="$SECRET_APPLE_SIGNING_IDENTITY" APPLE_ID="$SECRET_APPLE_ID"
             export APPLE_PASSWORD="$SECRET_APPLE_PASSWORD" APPLE_TEAM_ID="$SECRET_APPLE_TEAM_ID"
+          elif [ "$RUNNER_OS" = macOS ]; then
+            # An ad-hoc signature would make macOS forget every permission users gave Arcus.
+            if [ -z "$MACOS_SIGNING_CERTIFICATE" ]; then
+              echo "::error::The MACOS_SIGNING_CERTIFICATE secret is missing, so the Mac app would be ad-hoc signed."
+              exit 1
+            fi
+            APPLE_SIGNING_IDENTITY="$(scripts/macos-signing-keychain.sh "$RUNNER_TEMP/arcus-signing.keychain-db")"
+            export APPLE_SIGNING_IDENTITY
           fi
           pnpm tauri build --target ${{ matrix.target }} --config '{"bundle":{"createUpdaterArtifacts":true}}'
+          if [ "$RUNNER_OS" = macOS ]; then
+            app="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Arcus.app"
+            requirement="$(codesign --display --requirements - "$app" 2>/dev/null)"
+            echo "$requirement"
+            if ! echo "$requirement" | grep -q 'designated => identifier "com.rclonegui.desktop" and '; then
+              echo "::error::Arcus.app is not signed with a certificate; macOS would forget users' permissions."
+              exit 1
+            fi
+          fi
       - name: Attach the bundles to the release
         shell: bash
         env:

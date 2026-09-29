@@ -349,24 +349,30 @@ export async function invoke(cmd: string, args: Record<string, unknown>): Promis
       }
     }
     case "mac_permissions": {
+      // Stands in for System Settings: `localStorage["arcus-shim:macFda"] = "\"granted\""` flips Full Disk Access.
       const home = import.meta.env.VITE_DEV_HOME ?? "/Users/you";
-      const probed = loadJson("macFoldersProbed", false) || !!args.probeFolders;
-      if (args.probeFolders) saveJson("macFoldersProbed", true);
+      const fda = loadJson<string>("macFda", "notGranted");
       return {
-        fullDiskAccess: "notGranted",
-        folders: probed
+        fullDiskAccess: fda,
+        folders: args.probeFolders
           ? [
               { name: "Desktop", path: `${home}/Desktop`, status: "granted" },
-              { name: "Documents", path: `${home}/Documents`, status: "denied" },
+              { name: "Documents", path: `${home}/Documents`, status: fda === "granted" ? "granted" : "denied" },
               { name: "Downloads", path: `${home}/Downloads`, status: "granted" },
             ]
           : null,
         fuse: [],
         appPath: "/Applications/Arcus.app",
+        codeIdentity: loadJson<string>("macIdentity", 'identifier "com.rclonegui.desktop" and certificate leaf = H"0000"'),
       };
     }
     case "mac_open_privacy_settings":
       console.info(`dev shim: would open System Settings → ${args.pane as string}`);
+      return null;
+    case "e2e_ui_steps":
+      return null;
+    case "mac_request_local_network":
+      console.info("dev shim: would make macOS ask about the local network");
       return null;
     case "show_in_file_manager":
       console.info(`dev shim: would ${args.mode as string} in the file manager → ${(args.paths as string[]).join(", ")}`);

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged by the Tauri CLI into the app's generated Info.plist. The texts are what macOS shows in its
+     privacy prompts (rclone runs inside Arcus, so its file and network access is asked for in Arcus's name). -->
+<plist version="1.0">
+<dict>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>Arcus copies, syncs and watches the files you choose on your Desktop with rclone.</string>
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>Arcus copies, syncs and watches the files you choose in your Documents folder with rclone.</string>
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>Arcus copies, syncs and watches the files you choose in your Downloads folder with rclone.</string>
+  <key>NSRemovableVolumesUsageDescription</key>
+  <string>Arcus copies and syncs files on external drives you choose with rclone.</string>
+  <key>NSNetworkVolumesUsageDescription</key>
+  <string>Arcus copies and syncs files on network drives you choose with rclone.</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Arcus connects to storage on your local network, such as a NAS over SFTP, SMB or WebDAV, when one of your remotes points to it.</string>
+</dict>
+</plist>

@@ -44,7 +44,7 @@ export type AppStore = {
   /** A transfer whose details the Transfers page should open (the tray's "Show in Arcus"); cleared once shown. */
   detailsJobId: string | null;
   /** Progress through the macOS permissions guide; `applies` is false on other platforms. */
-  macPermissions: MacPermissionsReview & { applies: boolean };
+  macPermissions: MacPermissionsState;
   init: () => Promise<void>;
   refreshStatus: () => Promise<void>;
   setPage: (page: Page) => void;
@@ -53,15 +53,45 @@ export type AppStore = {
   saveSettings: (patch: Partial<Settings>) => Promise<Settings>;
   markMacPermissionsReviewed: () => Promise<void>;
   markMacFoldersRequested: () => Promise<void>;
+  markMacLocalNetworkRequested: () => Promise<void>;
 };
 
-/** The first-run permissions guide still has to be shown. */
-export const selectMacPermissionsPending = (s: AppStore) => s.macPermissions.applies && !s.macPermissions.reviewedAtUnix;
+export type MacPermissionsState = MacPermissionsReview & {
+  applies: boolean;
+  /** This copy's code identity, which macOS files its privacy answers under (`null` outside a bundle). */
+  identity: string | null;
+  /**
+   * The guide was finished under another code identity and Full Disk Access is gone with it: macOS has forgotten
+   * Arcus's answers (an ad-hoc signed update does that), so the guide comes first again, once.
+   */
+  forgotten: boolean;
+};
+
+/** The permissions guide has to be shown before anything else touches protected folders. */
+export const selectMacPermissionsPending = (s: AppStore) =>
+  s.macPermissions.applies && (!s.macPermissions.reviewedAtUnix || s.macPermissions.forgotten);
+/** The protected folders were requested under this identity, so listing them again does not prompt. */
+export const selectMacFoldersAsked = (s: AppStore) =>
+  !!s.macPermissions.foldersRequestedAtUnix && s.macPermissions.foldersIdentity === s.macPermissions.identity;
+/** macOS was asked about the local network under this identity. */
+export const selectMacLocalNetworkAsked = (s: AppStore) =>
+  !!s.macPermissions.localNetworkRequestedAtUnix && s.macPermissions.localNetworkIdentity === s.macPermissions.identity;
 
 const isUp = (daemon: DaemonUiState) => daemon.state === "running" || daemon.state === "starting";
 
-const persistMacPermissions = ({ reviewedAtUnix, foldersRequestedAtUnix }: MacPermissionsReview) =>
-  api.storeSet(MAC_PERMISSIONS_KEY, { reviewedAtUnix, foldersRequestedAtUnix });
+const persistMacPermissions = (s: MacPermissionsState) => {
+  const review: MacPermissionsReview = {
+    reviewedAtUnix: s.reviewedAtUnix,
+    reviewedIdentity: s.reviewedIdentity,
+    foldersRequestedAtUnix: s.foldersRequestedAtUnix,
+    foldersIdentity: s.foldersIdentity,
+    localNetworkRequestedAtUnix: s.localNetworkRequestedAtUnix,
+    localNetworkIdentity: s.localNetworkIdentity,
+  };
+  return api.storeSet(MAC_PERMISSIONS_KEY, review);
+};
+
+const nowUnix = () => Math.floor(Date.now() / 1000);
 
 let initialised = false;
 
@@ -74,18 +104,30 @@ export const useAppStore = create<AppStore>((set, get) => ({
   daemon: { state: "unknown", info: null },
   page: "explorer",
   detailsJobId: null,
-  macPermissions: { applies: false, reviewedAtUnix: null, foldersRequestedAtUnix: null },
+  macPermissions: {
+    applies: false,
+    identity: null,
+    forgotten: false,
+    reviewedAtUnix: null,
+    reviewedIdentity: null,
+    foldersRequestedAtUnix: null,
+    foldersIdentity: null,
+    localNetworkRequestedAtUnix: null,
+    localNetworkIdentity: null,
+  },
 
   async init() {
     if (initialised) return;
     initialised = true;
     try {
       await listen<DaemonEvent>("rclone:daemon", (event) => get().onDaemonEvent(event));
-      const [info, settings, status, review] = await Promise.all([
+      const [info, settings, status, review, macChecked] = await Promise.all([
         api.appInfo(),
         api.settingsGet(),
         api.rcloneStatus(),
         api.storeGet<Partial<MacPermissionsReview>>(MAC_PERMISSIONS_KEY).catch(() => null),
+        // Silent: Full Disk Access is read from a file only it may open, and the identity from the signature.
+        api.macPermissions(false).catch(() => null),
       ]);
       const current = get().daemon;
       let daemon: DaemonUiState;
@@ -100,12 +142,31 @@ export const useAppStore = create<AppStore>((set, get) => ({
       } else {
         daemon = { state: "stopped", info: null };
       }
-      const macPermissions = {
-        applies: info.os === "macos",
+      const applies = info.os === "macos";
+      const macNow = applies ? macChecked : null;
+      const identity = macNow?.codeIdentity ?? null;
+      const reviewedIdentity = review?.reviewedIdentity ?? null;
+      const macPermissions: MacPermissionsState = {
+        applies,
+        identity,
+        forgotten: false,
         reviewedAtUnix: review?.reviewedAtUnix ?? null,
+        reviewedIdentity,
         foldersRequestedAtUnix: review?.foldersRequestedAtUnix ?? null,
+        foldersIdentity: review?.foldersIdentity ?? null,
+        localNetworkRequestedAtUnix: review?.localNetworkRequestedAtUnix ?? null,
+        localNetworkIdentity: review?.localNetworkIdentity ?? null,
       };
-      const guide = macPermissions.applies && !macPermissions.reviewedAtUnix;
+      if (macPermissions.reviewedAtUnix && macNow && reviewedIdentity !== identity) {
+        if (macNow.fullDiskAccess === "granted") {
+          // Nothing to ask again: Full Disk Access covers every folder. Remember this identity.
+          macPermissions.reviewedIdentity = identity;
+          void persistMacPermissions(macPermissions).catch(() => undefined);
+        } else {
+          macPermissions.forgotten = true;
+        }
+      }
+      const guide = applies && (!macPermissions.reviewedAtUnix || macPermissions.forgotten);
       applyTheme((settings.theme as ThemeSetting) || "system");
       // For the platform-specific styles in index.css (the `mac:` variant).
       document.documentElement.dataset.os = info.os;
@@ -115,7 +176,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
         status,
         daemon,
         macPermissions,
-        page: isUp(daemon) ? (guide ? "permissions" : "explorer") : "setup",
+        // On macOS the guide comes first, before the explorer lists a folder or Setup runs, so every
+        // permission prompt comes from a button the user pressed in it.
+        page: guide ? "permissions" : isUp(daemon) ? "explorer" : "setup",
         ready: true,
       });
     } catch (e) {
@@ -150,7 +213,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   onDaemonEvent(event) {
     switch (event.state) {
       case "notInstalled":
-        set({ daemon: { state: "notInstalled", info: null }, page: "setup" });
+        set((s) => ({
+          daemon: { state: "notInstalled", info: null },
+          // The permissions guide stays up until it is done; Continue leads on to Setup.
+          page: s.page === "permissions" && selectMacPermissionsPending(s) ? s.page : "setup",
+        }));
         break;
       case "starting":
         forgetSessionOptions();
@@ -192,16 +259,25 @@ export const useAppStore = create<AppStore>((set, get) => ({
     return saved;
   },
 
-  /** The user finished (or skipped) the first-run guide: never show it again, go on to the app. */
+  /** The user finished (or skipped) the guide: it is not shown again under this identity; on to the app. */
   async markMacPermissionsReviewed() {
-    const next = { ...get().macPermissions, reviewedAtUnix: Math.floor(Date.now() / 1000) };
+    const s = get().macPermissions;
+    const next = { ...s, reviewedAtUnix: nowUnix(), reviewedIdentity: s.identity, forgotten: false };
     await persistMacPermissions(next);
     set({ macPermissions: next, page: isUp(get().daemon) ? "explorer" : "setup" });
   },
 
-  /** The protected folders have been requested once; probing them again is silent. */
+  /** The protected folders have been requested; probing them again is silent under this identity. */
   async markMacFoldersRequested() {
-    const next = { ...get().macPermissions, foldersRequestedAtUnix: Math.floor(Date.now() / 1000) };
+    const s = get().macPermissions;
+    const next = { ...s, foldersRequestedAtUnix: nowUnix(), foldersIdentity: s.identity };
+    await persistMacPermissions(next);
+    set({ macPermissions: next });
+  },
+
+  async markMacLocalNetworkRequested() {
+    const s = get().macPermissions;
+    const next = { ...s, localNetworkRequestedAtUnix: nowUnix(), localNetworkIdentity: s.identity };
     await persistMacPermissions(next);
     set({ macPermissions: next });
   },

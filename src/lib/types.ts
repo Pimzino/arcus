@@ -475,15 +475,29 @@ export type MacPermissions = {
   fuse: MacFuseInstall[];
   /** The .app bundle to add in System Settings, when running from one. */
   appPath: string | null;
+  /**
+   * The designated requirement macOS files this copy's privacy answers under; `null` outside a bundle.
+   * An ad-hoc signed copy's starts with `cdhash`, which changes with every build.
+   */
+  codeIdentity: string | null;
 };
 export type MacPrivacyPane = "fullDiskAccess" | "filesAndFolders" | "localNetwork" | "security";
 
-/** Progress through the macOS permissions guide, persisted in the app's store folder. */
+/**
+ * Progress through the macOS permissions guide, persisted in the app's store folder. macOS remembers each answer
+ * against the app's code identity (`MacPermissions.codeIdentity`), so every step records the identity it was taken
+ * under: under another one (an ad-hoc signed update) macOS has forgotten it, and probing a folder would prompt again.
+ */
 export type MacPermissionsReview = {
-  /** When the user finished the first-run guide (it is not shown again). */
+  /** When the user finished the guide; it comes back once if macOS forgets Arcus. */
   reviewedAtUnix: number | null;
-  /** When the protected folders were first requested; probing them again is silent after that. */
+  reviewedIdentity: string | null;
+  /** When the protected folders were requested; probing them again is silent under the same identity. */
   foldersRequestedAtUnix: number | null;
+  foldersIdentity: string | null;
+  /** When the guide made macOS ask about the local network (the answer cannot be read back). */
+  localNetworkRequestedAtUnix: number | null;
+  localNetworkIdentity: string | null;
 };
 
 // ---- rclone rc API shapes -------------------------------------------------

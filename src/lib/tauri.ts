@@ -104,7 +104,10 @@ export const api = {
   showInFileManager: (paths: string[], mode: "reveal" | "open") => invoke<void>("show_in_file_manager", { paths, mode }),
   /** macOS permissions guide. `probeFolders` lists the protected folders, which makes macOS prompt the first time. */
   macPermissions: (probeFolders: boolean) => invoke<MacPermissions>("mac_permissions", { probeFolders }),
+  /** Open System Settings at a privacy pane, after making sure Arcus is listed there (Full Disk Access, Local Network). */
   macOpenPrivacySettings: (pane: MacPrivacyPane) => invoke<void>("mac_open_privacy_settings", { pane }),
+  /** Make macOS ask whether Arcus may use the local network, which also lists it in System Settings. */
+  macRequestLocalNetwork: () => invoke<void>("mac_request_local_network"),
   /** macOS: copies of the app from before it was renamed Arcus ("Rclone GUI.app") still in Applications. */
   legacyAppInstalls: () => invoke<string[]>("legacy_app_installs"),
   /** Move one of those copies to the Trash; the backend accepts nothing else. */
