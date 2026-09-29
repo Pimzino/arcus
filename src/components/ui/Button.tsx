@@ -20,7 +20,9 @@ export const buttonBase =
   "no-ring inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lg border bg-clip-padding " +
   "font-medium whitespace-nowrap transition-all outline-none select-none " +
   "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 " +
-  "disabled:pointer-events-none disabled:opacity-50 " +
+  // A busy button is disabled too, but keeps its colour: faded, WebKit repaints the whole half-transparent
+  // button for every frame of the spinner, and the label shimmers.
+  "disabled:pointer-events-none disabled:not-aria-busy:opacity-50 " +
   "[&_svg]:pointer-events-none [&_svg]:shrink-0";
 
 export const buttonVariants: Record<ButtonVariant, string> = {
@@ -66,14 +68,31 @@ export function Button({
   return (
     <button
       type={type}
-      className={cn(buttonBase, buttonVariants[variant], buttonSizes[size], block && "w-full", className)}
+      className={cn(buttonBase, buttonVariants[variant], buttonSizes[size], block && "w-full", loading && !icon && "relative", className)}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       {...rest}
     >
-      {loading ? <Loader2 className="animate-spin" /> : icon}
-      {children}
-      {iconRight}
+      {loading && !icon ? (
+        // The label stays in the layout, hidden, so the button keeps its size and nothing next to it moves;
+        // the spinner sits over it.
+        <>
+          <span className="invisible contents">
+            {children}
+            {iconRight}
+          </span>
+          <span className="absolute inset-0 flex items-center justify-center">
+            <Loader2 className="animate-spin" />
+          </span>
+        </>
+      ) : (
+        <>
+          {/* An icon's place is the spinner's: same size, so nothing moves. */}
+          {loading ? <Loader2 className="animate-spin" /> : icon}
+          {children}
+          {iconRight}
+        </>
+      )}
     </button>
   );
 }
