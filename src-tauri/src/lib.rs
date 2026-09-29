@@ -7,6 +7,7 @@
 
 mod background;
 mod commands;
+mod e2e;
 mod email;
 mod error;
 mod file_manager;
@@ -14,6 +15,9 @@ mod macos;
 mod paths;
 mod rclone;
 mod settings;
+mod shutdown;
+mod tray;
+mod updater;
 mod watch;
 
 use error::AppError;
@@ -56,6 +60,8 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // Updates of Arcus itself; `updater.rs` decides when, the plugin fetches, verifies and installs.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
@@ -88,6 +94,7 @@ pub fn run() {
                 email: email::EmailState::default(),
             });
             background::setup(app)?;
+            updater::setup(app);
 
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -148,6 +155,9 @@ pub fn run() {
             commands::legacy_app_installs,
             commands::trash_legacy_app,
             background::background_status,
+            updater::update_status,
+            updater::update_check,
+            updater::update_install,
             email::email_status,
             email::email_set_password,
             email::email_send_test,
@@ -165,14 +175,9 @@ pub fn run() {
         .expect("error while building tauri application");
 
     app.run(|app_handle, event| {
+        // Stops every rclone before the app exits, without holding the window on screen meanwhile.
+        shutdown::on_run_event(app_handle, &event);
         background::on_run_event(app_handle, &event);
-        if let tauri::RunEvent::Exit = event {
-            let state = app_handle.state::<AppState>();
-            tauri::async_runtime::block_on(async {
-                state.transfer_daemons.stop_all().await;
-                let _ = state.daemon.stop().await;
-            });
-        }
     });
 }
 

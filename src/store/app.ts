@@ -41,11 +41,14 @@ export type AppStore = {
   status: RcloneStatus | null;
   daemon: DaemonUiState;
   page: Page;
+  /** A transfer whose details the Transfers page should open (the tray's "Show in Arcus"); cleared once shown. */
+  detailsJobId: string | null;
   /** Progress through the macOS permissions guide; `applies` is false on other platforms. */
   macPermissions: MacPermissionsReview & { applies: boolean };
   init: () => Promise<void>;
   refreshStatus: () => Promise<void>;
   setPage: (page: Page) => void;
+  showJobDetails: (jobId: string | null) => void;
   onDaemonEvent: (event: DaemonEvent) => void;
   saveSettings: (patch: Partial<Settings>) => Promise<Settings>;
   markMacPermissionsReviewed: () => Promise<void>;
@@ -70,6 +73,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   status: null,
   daemon: { state: "unknown", info: null },
   page: "explorer",
+  detailsJobId: null,
   macPermissions: { applies: false, reviewedAtUnix: null, foldersRequestedAtUnix: null },
 
   async init() {
@@ -137,6 +141,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   setPage(page) {
     set({ page });
+  },
+
+  showJobDetails(jobId) {
+    set(jobId ? { page: "transfers", detailsJobId: jobId } : { detailsJobId: null });
   },
 
   onDaemonEvent(event) {

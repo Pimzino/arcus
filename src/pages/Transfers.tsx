@@ -189,6 +189,14 @@ function JobRow({ job }: { job: TrackedJob }) {
   const fm = useFileManager();
   const [details, setDetails] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const detailsJobId = useAppStore((s) => s.detailsJobId);
+  const showJobDetails = useAppStore((s) => s.showJobDetails);
+  // Asked for from outside the page (the tray): open this job's details once.
+  useEffect(() => {
+    if (detailsJobId !== job.id) return;
+    setDetails(true);
+    showJobDetails(null);
+  }, [detailsJobId, job.id, showJobDetails]);
   const [editing, setEditing] = useState<TransferForm | null>(null);
 
   /** Start a new job with this job's settings, optionally as a different operation. */

@@ -23,6 +23,7 @@ pub struct Settings {
     pub pinned_rclone_version: Option<String>,
     /// Escape hatch: run this binary instead of a downloaded one.
     pub custom_rclone_binary: Option<String>,
+    /// Check GitHub for a newer Arcus shortly after the start and every six hours (`updater.rs`).
     pub check_updates_on_start: bool,
     pub auto_start_daemon: bool,
     /// rclone `--log-level` for the daemon: DEBUG, INFO, NOTICE or ERROR.
@@ -49,6 +50,9 @@ pub struct Settings {
     pub transfer_log_cleanup_interval_hours: u32,
     /// Whether a sweep also runs when the app starts.
     pub transfer_log_cleanup_on_start: bool,
+    /// Show the tray / menu bar icon, with running transfers' progress in its menu. Background mode shows it
+    /// whatever this says, since it is the way back in to a hidden window.
+    pub show_tray_icon: bool,
     /// Closing the window keeps Arcus running in the tray / menu bar, so watch folders and transfers go on.
     pub run_in_background: bool,
     /// Start Arcus, hidden in the tray, when the user logs in (see `background.rs`).
@@ -115,6 +119,7 @@ impl Default for Settings {
             transfer_log_retention_days: 30,
             transfer_log_cleanup_interval_hours: 24,
             transfer_log_cleanup_on_start: true,
+            show_tray_icon: true,
             run_in_background: false,
             launch_at_login: false,
             email: EmailSettings::default(),

@@ -64,6 +64,28 @@ export type TransferDaemonInfo = {
   logPath: string | null;
   logLevel: string | null;
   startedAtUnix: number;
+  /** "source → destination", for the tray menu. */
+  route: string | null;
+};
+
+/** Updates of Arcus itself (src-tauri updater.rs), as `update_status` and `updater:status` events give it. */
+export type UpdateState = "idle" | "checking" | "upToDate" | "available" | "downloading" | "installing" | "error";
+export type UpdateStatus = {
+  state: UpdateState;
+  currentVersion: string;
+  /** The newer version, once one is known. */
+  version: string | null;
+  /** Its release notes (Markdown, the version's CHANGELOG section). */
+  notes: string | null;
+  /** When it was published, RFC 3339. */
+  date: string | null;
+  downloaded: number;
+  total: number | null;
+  error: string | null;
+  checkedAtUnix: number | null;
+  /** This copy can install an update itself; otherwise the new version is downloaded from `releasesUrl`. */
+  canInstall: boolean;
+  releasesUrl: string;
 };
 
 export type ActivityKind =
@@ -124,6 +146,7 @@ export type Settings = {
   activeRcloneVersion: string | null;
   pinnedRcloneVersion: string | null;
   customRcloneBinary: string | null;
+  /** Check GitHub for a newer Arcus shortly after the start and every six hours. */
   checkUpdatesOnStart: boolean;
   autoStartDaemon: boolean;
   daemonLogLevel: string;
@@ -141,6 +164,8 @@ export type Settings = {
   transferLogCleanupIntervalHours: number;
   /** Whether the app also checks for old transfer logs when it starts. */
   transferLogCleanupOnStart: boolean;
+  /** Show the tray / menu bar icon, with running transfers in its menu (always shown in background mode). */
+  showTrayIcon: boolean;
   /** Closing the window keeps Arcus running in the tray / menu bar. */
   runInBackground: boolean;
   /** Start Arcus hidden in the tray when the user logs in. */
@@ -375,6 +400,7 @@ export const defaultSettings: Settings = {
   transferLogRetentionDays: 30,
   transferLogCleanupIntervalHours: 24,
   transferLogCleanupOnStart: true,
+  showTrayIcon: true,
   runInBackground: false,
   launchAtLogin: false,
   email: defaultEmailSettings,

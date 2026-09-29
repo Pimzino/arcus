@@ -23,7 +23,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, ChildStderr, Command};
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
 pub const DAEMON_EVENT: &str = "rclone:daemon";
@@ -67,6 +68,10 @@ pub fn now_unix() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
+}
+
+pub fn now_unix_ms() -> u128 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
 }
 
 fn free_port() -> AppResult<u16> {
@@ -241,18 +246,66 @@ pub(super) async fn wait_ready(spawned: &mut Spawned, client: &RcClient, timeout
     )))
 }
 
+/// What the task that owns a daemon's process is asked to do with it.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Stop {
+    /// Shut down the way rclone does on `core/quit`: its exit handlers unmount and flush first.
+    Terminate,
+    Kill,
+}
+
+/// Wait for the daemon's process to exit, acting on stop requests on the way. Returns its exit status
+/// and whether it was asked to stop. A dropped sender kills the process, as `kill_on_drop` would.
+pub(super) async fn supervise(child: &mut Child, mut stop_rx: UnboundedReceiver<Stop>) -> (std::io::Result<std::process::ExitStatus>, bool) {
+    let mut asked = false;
+    loop {
+        tokio::select! {
+            status = child.wait() => return (status, asked),
+            request = stop_rx.recv() => {
+                asked = true;
+                match request {
+                    Some(Stop::Terminate) if terminate(child) => {}
+                    _ => {
+                        let _ = child.start_kill();
+                        return (child.wait().await, asked);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// SIGTERM. rclone handles it like `core/quit` (it runs its exit handlers, which unmount, and exits) but
+/// at once, where `core/quit` waits 1.5 s so that its reply gets out; measured with rclone 1.75.1:
+/// 1.54 s against 0.03 s. Sent from the task that owns the child, which alone reaps it, so the pid
+/// cannot have been handed to another process yet.
+#[cfg(unix)]
+fn terminate(child: &Child) -> bool {
+    match child.id() {
+        // SAFETY: kill(2) with a pid we own and a valid signal number.
+        Some(pid) => unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) == 0 },
+        // Already exited: the wait returns at once.
+        None => true,
+    }
+}
+
+/// Windows has no signal a windowless process can be sent to shut down cleanly (see `quit_and_wait`).
+#[cfg(not(unix))]
+fn terminate(_child: &Child) -> bool {
+    false
+}
+
 /// Ask a daemon to quit; kill it if it does not exit promptly.
-pub(super) async fn quit_and_wait(
-    client: &RcClient,
-    mut waiter: JoinHandle<()>,
-    stop_tx: Option<oneshot::Sender<()>>,
-) {
-    let _ = tokio::time::timeout(Duration::from_secs(3), client.call("core/quit", &json!({}))).await;
+pub(super) async fn quit_and_wait(client: &RcClient, mut waiter: JoinHandle<()>, stop_tx: &UnboundedSender<Stop>) {
+    if cfg!(unix) {
+        let _ = stop_tx.send(Stop::Terminate);
+    } else {
+        // rclone exits 1.5 s after it answers; callers that stop several daemons do so side by side.
+        let _ = tokio::time::timeout(Duration::from_secs(3), client.call("core/quit", &json!({}))).await;
+    }
     if tokio::time::timeout(Duration::from_secs(4), &mut waiter).await.is_err() {
         log::warn!("rclone rcd did not quit gracefully; killing it");
-        if let Some(tx) = stop_tx {
-            let _ = tx.send(());
-        }
+        let _ = stop_tx.send(Stop::Kill);
         let _ = tokio::time::timeout(Duration::from_secs(5), &mut waiter).await;
     }
 }
@@ -262,7 +315,7 @@ struct Running {
     client: RcClient,
     generation: u64,
     expected_exit: Arc<AtomicBool>,
-    stop_tx: Option<oneshot::Sender<()>>,
+    stop_tx: UnboundedSender<Stop>,
     waiter: JoinHandle<()>,
 }
 
@@ -381,7 +434,7 @@ impl Daemon {
 
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         let expected_exit = Arc::new(AtomicBool::new(false));
-        let (stop_tx, stop_rx) = oneshot::channel::<()>();
+        let (stop_tx, stop_rx) = tokio::sync::mpsc::unbounded_channel();
         let waiter = {
             let app = app.clone();
             let expected_exit = expected_exit.clone();
@@ -389,13 +442,7 @@ impl Daemon {
             let daemon_file = paths.daemon_file.clone();
             let mut child = spawned.child;
             tokio::spawn(async move {
-                let status = tokio::select! {
-                    status = child.wait() => status,
-                    _ = stop_rx => {
-                        let _ = child.start_kill();
-                        child.wait().await
-                    }
-                };
+                let (status, _) = supervise(&mut child, stop_rx).await;
                 let code = status.ok().and_then(|s| s.code());
                 let _ = tokio::fs::remove_file(&daemon_file).await;
                 app.state::<crate::AppState>()
@@ -423,7 +470,7 @@ impl Daemon {
             client,
             generation,
             expected_exit,
-            stop_tx: Some(stop_tx),
+            stop_tx,
             waiter,
         });
         let _ = app.emit(DAEMON_EVENT, DaemonEvent::Running { info: info.clone() });
@@ -445,11 +492,11 @@ impl Daemon {
     /// Ask the daemon to quit; kill it if it does not exit promptly.
     pub async fn stop(&self) -> AppResult<()> {
         let running = self.inner.lock().await.take();
-        let Some(mut running) = running else {
+        let Some(running) = running else {
             return Ok(());
         };
         running.expected_exit.store(true, Ordering::SeqCst);
-        quit_and_wait(&running.client, running.waiter, running.stop_tx.take()).await;
+        quit_and_wait(&running.client, running.waiter, &running.stop_tx).await;
         Ok(())
     }
 }

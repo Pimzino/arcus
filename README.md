@@ -52,6 +52,10 @@ published (the AppImage is started on Ubuntu 22.04, installs and verifies rclone
 they are new, so please [report anything that doesn't work](https://github.com/Pimzino/arcus/issues). Make the AppImage executable
 (`chmod +x Arcus_*.AppImage`) before running it; on Ubuntu 24.04 and later it also needs `libfuse2t64`.
 
+Arcus keeps itself up to date: it checks the releases here when it starts and every six hours (Settings →
+About → *Check for updates automatically*), says when a new version is out, and **Install and restart**
+downloads it, checks its signature and installs it. Updating from v0.6.1 or earlier is by hand, once.
+
 On first launch Arcus downloads rclone and checks its signature, which takes a few seconds. Mounting a remote
 as a drive also needs [macFUSE](https://macfuse.github.io/) or [FUSE-T](https://www.fuse-t.org/) on macOS, or
 [WinFsp](https://winfsp.dev/) on Windows, or `fuse3` on Linux.
@@ -97,12 +101,20 @@ Your rclone config is rclone's own file and is not touched either.
 * **Verified rclone:** the official binary, checked against rclone's PGP-signed checksums and kept private to
   the app. Pin a version or use your own binary, and edit any global rclone option, in Settings.
 
+### Menu bar and tray
+
+Arcus puts an icon in the menu bar (macOS) or the system tray (Windows, Linux); turn it off in Settings →
+Background. Its menu lists the transfers running right now, each with how far it has got; open one for its
+route, size, speed, time left and file counts, to show it in Arcus or to stop it. On macOS the overall progress
+also shows beside the icon while transfers run. The numbers come from the transfers' own rclone, so they stay
+current with the window closed.
+
 ### Running in the background
 
 Turn on **Settings → Background → Keep running when the window is closed** and closing the window only hides
 it: Arcus stays in the menu bar (macOS) or the system tray (Windows, Linux), so watch folders and transfers
-carry on. The icon's menu opens the window again, shows how many transfers are running, pauses and resumes
-watch folders, and quits Arcus for real (⌘Q does too), which stops anything still running. On macOS a hidden
+carry on (the menu bar or tray icon stays on while this is on). The icon's menu opens the window again, shows
+the running transfers, pauses and resumes watch folders, and quits Arcus for real (⌘Q does too), which stops anything still running. On macOS a hidden
 Arcus also leaves the Dock and the app switcher; on Windows a left click on the icon opens the window.
 
 **Open at login** adds Arcus to the programs your account starts when you log in, with `--background`, so it
@@ -249,6 +261,15 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib -- --ignored live_email --
 # side must have its controls level. Screenshots and report.json in
 # e2e/artifacts/form-layout/.
 node e2e/form-layout.mjs
+# The built Mac app (macOS, ~5 min the first time): builds Arcus 0.0.1 and 99.0.0 with a throwaway
+# signing key, runs each in a home folder of its own and checks the tray's transfer view against a real
+# rclone copy, that quitting with transfers running takes under a second and leaves no rclone behind, that
+# 0.0.1 updates itself to 99.0.0 from a local latest.json, and that a tampered update is refused. Report,
+# tray menus and app logs in e2e/artifacts/macos-app/.
+node e2e/macos-app.mjs
+# Update UI (macOS): the Settings rows, the notice and the update dialog in WebKit against the dev shim's
+# updater (found, nothing newer, offline, bad signature). Screenshots and report.json in e2e/artifacts/update-ui/.
+node e2e/update-ui.mjs
 ```
 
 ### Developing the UI in a browser
@@ -338,7 +359,8 @@ Three workflows in `.github/workflows/`:
 * **`release.yml`** runs for a version tag: `ci.yml` first, then it drafts a GitHub release whose notes are
   that version's changelog section, builds the macOS (Apple Silicon and Intel), Windows and Linux bundles,
   runs the end-to-end test again on the AppImage itself, attaches the `.dmg`, `.msi`, setup `.exe`,
-  `.AppImage`, `.deb` and `.rpm` files and publishes the release. If a bundle fails to build, the release
+  `.AppImage`, `.deb` and `.rpm` files, the signed update files and a `latest.json` listing them (which
+  installed copies read to update themselves, see *Updates* below) and publishes the release. If a bundle fails to build, the release
   stays a draft, and re-running the failed jobs finishes it. It refuses a tag that doesn't match the version
   recorded in the files.
 * **`windows-upgrade.yml`**, run by hand from the Actions tab, installs a published release on a Windows
@@ -359,6 +381,16 @@ The command sets the new version in `package.json`, `src-tauri/tauri.conf.json`,
 [`CHANGELOG.md`](CHANGELOG.md) listing every commit since the previous release with a link to its commit ID,
 commits that as "Release vX.Y.Z", tags the commit and pushes the commit and the tag together. A version that
 has never been released can be released as it is by naming it, e.g. `pnpm release 0.1.0`.
+
+### Updates
+
+Installed copies read `latest.json` from the latest release, download their platform's update file and check
+its signature against the public key in `tauri.conf.json` (`plugins.updater.pubkey`) before installing it.
+`release.yml` signs the update files with the private half, kept in the repository secrets
+`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; without them it builds nothing. Keep a
+copy of the key somewhere safe: a release signed with any other key cannot update the copies already
+installed. Local builds make no update files (`bundle.createUpdaterArtifacts` is switched on in
+`release.yml` only), so they need no key.
 
 ## Code signing
 

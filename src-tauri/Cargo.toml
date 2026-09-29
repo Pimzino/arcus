@@ -23,6 +23,10 @@ tauri = { version = "2", features = ["tray-icon"] }
 # 2.4.5 lets the running copy bring its window to the front on Windows; 2.5 needs tauri 2.12.
 tauri-plugin-single-instance = { version = "~2.4.5", default-features = false }
 tauri-plugin-opener = "2"
+# Updates of Arcus from its GitHub releases, checked against the minisign key in tauri.conf.json (updater.rs).
+# 2.13 needs tauri 2.12 (see single-instance above). native-tls like the app's own reqwest; no `zip`, which is
+# only for the updater's v1 archive format (this app publishes the installers themselves, see release.yml).
+tauri-plugin-updater = { version = "~2.12.0", default-features = false, features = ["native-tls", "system-proxy"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-log = "2"
 log = "0.4"
@@ -51,8 +55,9 @@ lettre = { version = "0.11.23", default-features = false, features = ["smtp-tran
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSURL", "NSError", "NSFileManager"] }
 
-# Linux: rclone child processes get PR_SET_PDEATHSIG, so they stop when the app dies (see daemon::spawn_rcd).
-[target.'cfg(target_os = "linux")'.dependencies]
+# Unix: rclone is stopped with SIGTERM (daemon::terminate); on Linux, rclone child processes also get
+# PR_SET_PDEATHSIG, so they stop when the app dies (see daemon::spawn_rcd).
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

@@ -329,27 +329,36 @@ pub async fn transfer_daemon_start(
     state: State<'_, AppState>,
     label: String,
     log_level: Option<String>,
+    route: Option<String>,
 ) -> AppResult<TransferDaemonInfo> {
     let (binary, _) = resolve_active_binary(&state)?;
     let settings = state.settings.lock().unwrap().clone();
+    let emitter = app.clone();
     let sink: ActivitySink = std::sync::Arc::new(move |batch| {
-        let _ = app.emit(ACTIVITY_EVENT, batch);
+        let _ = emitter.emit(ACTIVITY_EVENT, batch);
     });
-    state
+    let mut info = state
         .transfer_daemons
         .start(&state.paths, &settings, &binary, &label, log_level.as_deref(), sink)
-        .await
+        .await?;
+    state.transfer_daemons.set_route(&info.id, route.clone()).await;
+    info.route = route;
+    crate::background::refresh_tray(&app);
+    Ok(info)
 }
 
 /// Quit a per-transfer daemon, appending `summary` to its log file if it keeps one.
 /// Returns the log path and the final activity counts.
 #[tauri::command]
 pub async fn transfer_daemon_stop(
+    app: AppHandle,
     state: State<'_, AppState>,
     id: String,
     summary: Option<String>,
 ) -> AppResult<Option<StoppedTransfer>> {
-    state.transfer_daemons.stop(&id, summary).await
+    let stopped = state.transfer_daemons.stop(&id, summary).await;
+    crate::background::refresh_tray(&app);
+    stopped
 }
 
 #[tauri::command]

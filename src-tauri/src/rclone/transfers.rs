@@ -8,7 +8,7 @@
 //! A bandwidth limit, which rclone also applies per process, then covers this transfer alone.
 
 use super::activity::{self, ActivitySink, ActivitySnapshot, ActivityState, Level, LogFile};
-use super::daemon::{now_unix, quit_and_wait, spawn_rcd, wait_ready, LogTarget};
+use super::daemon::{now_unix, quit_and_wait, spawn_rcd, supervise, wait_ready, LogTarget, Stop};
 use super::rc::RcClient;
 use crate::error::{AppError, AppResult};
 use crate::paths::AppPaths;
@@ -20,7 +20,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, SystemTime};
 use tokio::io::AsyncWriteExt;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
 #[derive(Serialize, Clone, Debug)]
@@ -34,6 +35,8 @@ pub struct TransferDaemonInfo {
     pub log_path: Option<String>,
     pub log_level: Option<String>,
     pub started_at_unix: u64,
+    /// Where the transfer goes, "source → destination", for the tray menu; set after the start.
+    pub route: Option<String>,
 }
 
 /// What is left of a transfer daemon once it has quit.
@@ -49,7 +52,7 @@ struct Entry {
     info: TransferDaemonInfo,
     client: RcClient,
     exited: Arc<AtomicBool>,
-    stop_tx: Option<oneshot::Sender<()>>,
+    stop_tx: UnboundedSender<Stop>,
     waiter: JoinHandle<()>,
     /// Reads the daemon's log until it exits.
     pump: JoinHandle<()>,
@@ -59,6 +62,8 @@ struct Entry {
 #[derive(Default)]
 pub struct TransferDaemons {
     inner: Mutex<HashMap<String, Entry>>,
+    /// The app is quitting: `stop_all` has begun, and no new transfer may start behind its back.
+    closing: AtomicBool,
 }
 
 /// `YYYYMMDD-HHMMSS` in UTC for a unix timestamp (no chrono dependency).
@@ -178,6 +183,9 @@ impl TransferDaemons {
         log_level: Option<&str>,
         sink: ActivitySink,
     ) -> AppResult<TransferDaemonInfo> {
+        if self.closing.load(Ordering::SeqCst) {
+            return Err(AppError::msg("Arcus is quitting"));
+        }
         let id: String = uuid::Uuid::new_v4().simple().to_string()[..8].to_string();
         let started_at_unix = now_unix();
         let log_level = log_level.map(|level| match level.to_ascii_uppercase().as_str() {
@@ -230,23 +238,17 @@ impl TransferDaemons {
             log_path: log_path.map(|p| p.to_string_lossy().to_string()),
             log_level,
             started_at_unix,
+            route: None,
         };
         let exited = Arc::new(AtomicBool::new(false));
-        let (stop_tx, stop_rx) = oneshot::channel::<()>();
+        let (stop_tx, stop_rx) = tokio::sync::mpsc::unbounded_channel();
         let waiter = {
             let exited = exited.clone();
             let stderr_tail = spawned.stderr_tail.clone();
             let mut child = spawned.child;
             let id = id.clone();
             tokio::spawn(async move {
-                let mut asked = true;
-                let status = tokio::select! {
-                    status = child.wait() => { asked = false; status }
-                    _ = stop_rx => {
-                        let _ = child.start_kill();
-                        child.wait().await
-                    }
-                };
+                let (status, asked) = supervise(&mut child, stop_rx).await;
                 exited.store(true, Ordering::SeqCst);
                 let code = status.ok().and_then(|s| s.code());
                 if asked || code == Some(0) {
@@ -263,7 +265,7 @@ impl TransferDaemons {
                 info: info.clone(),
                 client,
                 exited,
-                stop_tx: Some(stop_tx),
+                stop_tx,
                 waiter,
                 pump,
                 activity,
@@ -273,7 +275,19 @@ impl TransferDaemons {
             Some(path) => log::info!("transfer daemon {} (pid {:?}) logging to {path}", info.id, info.pid),
             None => log::info!("transfer daemon {} (pid {:?}) started", info.id, info.pid),
         }
+        // Quitting began while this one was starting: `stop_all` has its list already, so stop it here.
+        if self.closing.load(Ordering::SeqCst) {
+            let _ = self.stop(&info.id, None).await;
+            return Err(AppError::msg("Arcus is quitting"));
+        }
         Ok(info)
+    }
+
+    /// Say where a transfer goes, for the tray menu.
+    pub async fn set_route(&self, id: &str, route: Option<String>) {
+        if let Some(entry) = self.inner.lock().await.get_mut(id) {
+            entry.info.route = route.filter(|r| !r.trim().is_empty());
+        }
     }
 
     pub async fn client(&self, id: &str) -> AppResult<RcClient> {
@@ -302,7 +316,7 @@ impl TransferDaemons {
         let Some(mut entry) = entry else {
             return Ok(None);
         };
-        quit_and_wait(&entry.client, entry.waiter, entry.stop_tx.take()).await;
+        quit_and_wait(&entry.client, entry.waiter, &entry.stop_tx).await;
         // The log ends when the process does; wait for its last lines to be counted and written.
         if tokio::time::timeout(Duration::from_secs(3), &mut entry.pump).await.is_err() {
             log::warn!("the log of transfer daemon {id} did not end with the process");
@@ -320,11 +334,11 @@ impl TransferDaemons {
         }))
     }
 
+    /// Stop every transfer's rclone, side by side, and start no more: the app is quitting.
     pub async fn stop_all(&self) {
+        self.closing.store(true, Ordering::SeqCst);
         let ids: Vec<String> = self.inner.lock().await.keys().cloned().collect();
-        for id in ids {
-            let _ = self.stop(&id, None).await;
-        }
+        futures_util::future::join_all(ids.iter().map(|id| self.stop(id, None))).await;
     }
 
     /// Delete the transfer logs nothing has written to for `retention_days` days (0 counts as 1).

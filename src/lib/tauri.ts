@@ -8,6 +8,7 @@ import {
   toAppError,
   type AppInfo,
   type BackgroundStatus,
+  type UpdateStatus,
   type EmailStatus,
   type JobReport,
   type WatchJob,
@@ -83,8 +84,8 @@ export const api = {
    * Start the rclone daemon that runs one transfer. What the transfer does arrives as
    * `rclone:transfer-activity` events; with a `logLevel` its log is also kept as a file.
    */
-  transferDaemonStart: (label: string, logLevel?: string | null) =>
-    invoke<TransferDaemonInfo>("transfer_daemon_start", { label, logLevel: logLevel ?? null }),
+  transferDaemonStart: (label: string, logLevel?: string | null, route?: string | null) =>
+    invoke<TransferDaemonInfo>("transfer_daemon_start", { label, logLevel: logLevel ?? null, route: route ?? null }),
   /** Quit a transfer's daemon; resolves with its final activity counts once all its events are out. */
   transferDaemonStop: (id: string, summary?: string) =>
     invoke<StoppedTransfer | null>("transfer_daemon_stop", { id, summary: summary ?? null }),
@@ -111,6 +112,12 @@ export const api = {
 
   /** Tray icon, launch at login: what is actually in place (the settings say what is wanted). */
   backgroundStatus: () => invoke<BackgroundStatus>("background_status"),
+
+  /** Updates of Arcus itself (src-tauri updater.rs). Changes also arrive as `updater:status` events. */
+  updateStatus: () => invoke<UpdateStatus>("update_status"),
+  updateCheck: () => invoke<UpdateStatus>("update_check"),
+  /** Download, verify and install the update found, stopping every transfer; Arcus then restarts. */
+  updateInstall: () => invoke<void>("update_install"),
 
   emailStatus: () => invoke<EmailStatus>("email_status"),
   /** Save the SMTP password (`null` forgets it). It is never read back. */

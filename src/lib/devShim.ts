@@ -3,6 +3,7 @@
 // proxied by Vite to a standalone `rclone rcd`; everything else is simulated.
 
 import { emailShim } from "./devShimEmail";
+import { updateShim } from "./devShimUpdate";
 import { watchShim } from "./devShimWatch";
 import {
   AppError,
@@ -303,7 +304,7 @@ export async function invoke(cmd: string, args: Record<string, unknown>): Promis
       const id = `shim-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
       const logPath = args.logLevel ? `/dev/shim/logs/transfers/${id}.log` : null;
       shimDaemons.set(id, { id, logPath, group: null, seen: new Set(), seq: 0, counts: noCounts(), timer: null });
-      return { id, label: args.label, port: 5572, pid: 0, logPath, logLevel: args.logLevel ?? null, startedAtUnix: Math.floor(Date.now() / 1000) };
+      return { id, label: args.label, port: 5572, pid: 0, logPath, logLevel: args.logLevel ?? null, startedAtUnix: Math.floor(Date.now() / 1000), route: args.route ?? null };
     }
     case "transfer_daemon_stop": {
       const daemon = shimDaemons.get(args.id as string);
@@ -371,8 +372,8 @@ export async function invoke(cmd: string, args: Record<string, unknown>): Promis
       console.info(`dev shim: would ${args.mode as string} in the file manager → ${(args.paths as string[]).join(", ")}`);
       return null;
     default: {
-      // Watch folders and email/background commands are simulated in files of their own.
-      for (const shim of [watchShim, emailShim]) {
+      // Watch folders, email/background and updater commands are simulated in files of their own.
+      for (const shim of [watchShim, emailShim, updateShim]) {
         const handled = await shim(cmd, args, emit);
         if (handled !== UNHANDLED) return handled;
       }

@@ -3,6 +3,8 @@ import { EmailFailureToasts } from "./components/app/EmailFailureToasts";
 import { LegacyAppNotice } from "./components/app/LegacyApp";
 import { Sidebar } from "./components/app/Sidebar";
 import { StatusBar } from "./components/app/StatusBar";
+import { UpdatePrompt } from "./components/app/Update";
+import { listen } from "./lib/tauri";
 import { Button, EmptyState, ErrorMessage, Spinner, ToastViewport } from "./components/ui";
 import { ConsolePage } from "./pages/Console";
 import { ExplorerPage } from "./pages/Explorer";
@@ -106,6 +108,16 @@ export default function App() {
     if (daemonState === "running") void hydrateJobs().then(() => reconcileJobs());
   }, [daemonState, hydrateJobs, reconcileJobs]);
 
+  // The tray's "Show in Arcus" on a running transfer: its details, found by the transfer's rclone.
+  useEffect(() => {
+    const unlisten = listen<string>("tray:show-transfer", (daemonId) => {
+      const job = useJobsStore.getState().jobs.find((j) => j.daemonId === daemonId);
+      if (job) useAppStore.getState().showJobDetails(job.id);
+      else setPage("transfers");
+    });
+    return () => void unlisten.then((fn) => fn());
+  }, [setPage]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
@@ -142,6 +154,7 @@ export default function App() {
       <StatusBar />
       <LegacyAppNotice />
       <EmailFailureToasts />
+      <UpdatePrompt />
       <ToastViewport />
     </div>
   );

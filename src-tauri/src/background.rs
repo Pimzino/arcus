@@ -1,5 +1,6 @@
-//! Running in the background: the tray / menu bar icon, hiding the window instead of quitting when it
-//! is closed, starting hidden at login, and handing a second launch over to the running copy.
+//! Running in the background: hiding the window instead of quitting when it is closed, starting hidden at
+//! login, and handing a second launch over to the running copy. The tray / menu bar icon that goes with it
+//! is `tray.rs`.
 //!
 //! Arcus has to keep running for watch folders and long transfers to go on, but a window nobody looks
 //! at is clutter, so with `runInBackground` on, closing the window only hides it and the tray icon
@@ -14,26 +15,13 @@ use crate::settings::Settings;
 use crate::AppState;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
-use std::time::Duration;
-use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, RunEvent, Window, WindowEvent};
 
 /// Passed by the launch-at-login entry: the window starts hidden, only the tray icon shows.
 pub const BACKGROUND_ARG: &str = "--background";
 
 const MAIN_WINDOW: &str = "main";
-const TRAY_ID: &str = "arcus";
-const MENU_OPEN: &str = "arcus-tray-open";
-const MENU_STATUS: &str = "arcus-tray-status";
-const MENU_PAUSE: &str = "arcus-tray-pause";
-const MENU_QUIT: &str = "arcus-tray-quit";
-
-/// How often the tray's running count is brought up to date while nothing tells us it changed (a
-/// transfer started by hand in the UI does not call `refresh_tray`).
-const TRAY_REFRESH: Duration = Duration::from_secs(3);
 
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
@@ -50,45 +38,32 @@ pub fn launched_in_background() -> bool {
     std::env::args().any(|arg| arg == BACKGROUND_ARG)
 }
 
-/// The tray and its menu items that change, kept so they can be updated in place.
-struct Tray {
-    icon: TrayIcon<tauri::Wry>,
-    status: MenuItem<tauri::Wry>,
-    pause: CheckMenuItem<tauri::Wry>,
-}
-
 #[derive(Default)]
 struct BackgroundState {
-    tray: Mutex<Option<Tray>>,
-    /// Mirrors `tray.is_some()` for readers off the main thread.
-    tray_available: AtomicBool,
-    /// Bumped whenever a tray is created, so an old refresh loop notices it has been replaced and ends.
-    tray_generation: AtomicU64,
     /// The launch-at-login setting last written to the OS, so saving unrelated settings does not
     /// rewrite the entry (on Windows that is a `reg.exe` run each time). Held while writing, so a
     /// status check waits for a write in progress.
     login_applied: Mutex<Option<bool>>,
-    /// The status line last put in the menu; Linux rebuilds the whole indicator menu on every change.
-    last_status: Mutex<String>,
+}
+
+/// Whether the tray icon should show: the user wants it, or background mode needs it as the way back in.
+fn tray_wanted(settings: &Settings) -> bool {
+    settings.show_tray_icon || settings.run_in_background
 }
 
 /// Once, from the app's `setup`, after `AppState` is managed.
 pub fn setup(app: &tauri::App) -> tauri::Result<()> {
     app.manage(BackgroundState::default());
+    crate::tray::setup(app);
     let handle = app.handle().clone();
 
-    // The tray's menu events arrive here. Registered once for the life of the app: a handler given to
-    // `TrayIconBuilder::on_menu_event` is never unregistered, so a tray made again after the setting
-    // was switched off and on would run its menu actions twice.
-    app.on_menu_event(on_menu_event);
-
     let settings = app.state::<AppState>().settings.lock().unwrap().clone();
-    apply_tray(&handle, &settings);
+    crate::tray::apply(&handle, tray_wanted(&settings));
 
     // The window is created hidden (tauri.conf.json) so that a start at login shows nothing at all;
     // every other start shows it here. A `--background` start with background mode switched off
     // since would leave no way to reach the app, so it opens normally too.
-    let stay_hidden = launched_in_background() && settings.run_in_background && tray_available(&handle);
+    let stay_hidden = launched_in_background() && settings.run_in_background && crate::tray::available(&handle);
     if stay_hidden {
         log::info!("started in the background; the window stays hidden until it is opened from the tray");
         set_dock_visible(&handle, false);
@@ -106,22 +81,46 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
 
 /// After the settings change: show or hide the tray icon, add or remove the launch-at-login entry.
 pub fn apply(app: &AppHandle, settings: &Settings) {
-    apply_tray(app, settings);
+    crate::tray::apply(app, tray_wanted(settings));
+    // Without the tray a hidden window could not be reached again.
+    if !crate::tray::available(app) && !main_window_visible(app) {
+        show_main_window(app);
+    }
     sync_launch_at_login(app, false);
 }
 
-/// Rebuild the tray menu's changing items (running count, paused). Cheap; call it when those change.
+/// Bring the tray menu up to date soon (running transfers, paused, an update). Cheap; call it when those change.
 pub fn refresh_tray(app: &AppHandle) {
-    if !tray_available(app) {
-        return;
+    crate::tray::refresh(app);
+}
+
+/// The app is about to quit or be replaced by an update: the window and the tray icon go at once, and on
+/// macOS the Dock icon too, so nothing sits on screen while rclone stops. On the main thread only: AppKit
+/// aborts the app when a menu bar item is removed from any other (`prepare_for_quit_from_task` is for those).
+pub fn prepare_for_quit(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+        let _ = window.hide();
     }
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move { update_tray(&app).await });
+    crate::tray::remove(app);
+    set_dock_visible(app, false);
+}
+
+/// `prepare_for_quit` from an async task: done on the main thread, and awaited.
+pub async fn prepare_for_quit_from_task(app: &AppHandle) {
+    let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+    let handle = app.clone();
+    let queued = app.run_on_main_thread(move || {
+        prepare_for_quit(&handle);
+        let _ = done_tx.send(());
+    });
+    if queued.is_ok() {
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), done_rx).await;
+    }
 }
 
 #[tauri::command]
 pub async fn background_status(app: AppHandle) -> BackgroundStatus {
-    let tray_available = tray_available(&app);
+    let tray_available = crate::tray::available(&app);
     let handle = app.clone();
     let registered = tauri::async_runtime::spawn_blocking(move || {
         // Waits for a write that is still going on (see `login_applied`).
@@ -186,8 +185,12 @@ pub fn on_second_instance(app: &AppHandle, args: Vec<String>) {
     show_main_window(app);
 }
 
-/// Show, unminimise and focus the main window, bringing the app back to the Dock on macOS.
+/// Show, unminimise and focus the main window, bringing the app back to the Dock on macOS. Not while
+/// the app is quitting: its window went first on purpose.
 pub fn show_main_window(app: &AppHandle) {
+    if crate::shutdown::is_quitting() {
+        return;
+    }
     set_dock_visible(app, true);
     let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
         return;
@@ -215,98 +218,12 @@ fn main_window_visible(app: &AppHandle) -> bool {
     app.get_webview_window(MAIN_WINDOW).and_then(|w| w.is_visible().ok()).unwrap_or(false)
 }
 
-// ---------------------------------------------------------------------------------------------------
-// The tray.
-
-fn tray_available(app: &AppHandle) -> bool {
-    app.try_state::<BackgroundState>().is_some_and(|s| s.tray_available.load(Ordering::SeqCst))
-}
-
-/// Create or remove the tray to match `runInBackground`. On the main thread (setup, `settings_set`).
-fn apply_tray(app: &AppHandle, settings: &Settings) {
-    let state = app.state::<BackgroundState>();
-    let exists = state.tray.lock().unwrap().is_some();
-    if settings.run_in_background && !exists {
-        // Built without holding the lock: making menu items may wait for the main thread.
-        match build_tray(app) {
-            Ok(tray) => {
-                *state.tray.lock().unwrap() = Some(tray);
-                state.tray_available.store(true, Ordering::SeqCst);
-                let generation = state.tray_generation.fetch_add(1, Ordering::SeqCst) + 1;
-                state.last_status.lock().unwrap().clear();
-                let app = app.clone();
-                tauri::async_runtime::spawn(async move { tray_refresh_loop(app, generation).await });
-            }
-            Err(err) => {
-                // Not fatal: Arcus runs as before, closing the window just hides it (a second start
-                // brings it back), and the Background settings say the tray is not available.
-                log::warn!("no tray icon: {err}");
-            }
-        }
-    } else if !settings.run_in_background && exists {
-        let removed = state.tray.lock().unwrap().take();
-        state.tray_available.store(false, Ordering::SeqCst);
-        state.tray_generation.fetch_add(1, Ordering::SeqCst);
-        if removed.is_some() {
-            app.remove_tray_by_id(TRAY_ID);
-        }
-        // Without the tray a hidden window could not be reached again.
-        if !main_window_visible(app) {
-            show_main_window(app);
-        }
-    }
-}
-
-fn build_tray(app: &AppHandle) -> Result<Tray, String> {
-    if !tray_host_available() {
-        return Err("this desktop has no AppIndicator library (libayatana-appindicator3) for tray icons".into());
-    }
-    let open = MenuItem::with_id(app, MENU_OPEN, "Open Arcus", true, None::<&str>).map_err(|e| e.to_string())?;
-    let status = MenuItem::with_id(app, MENU_STATUS, running_text(0), false, None::<&str>)
-        .map_err(|e| e.to_string())?;
-    let paused = crate::watch::is_paused(app);
-    let pause = CheckMenuItem::with_id(app, MENU_PAUSE, "Pause watch folders", true, paused, None::<&str>)
-        .map_err(|e| e.to_string())?;
-    let quit = MenuItem::with_id(app, MENU_QUIT, "Quit Arcus", true, None::<&str>).map_err(|e| e.to_string())?;
-    let sep1 = PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?;
-    let sep2 = PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?;
-    let menu = Menu::with_items(app, &[&open, &sep1, &status, &pause, &sep2, &quit]).map_err(|e| e.to_string())?;
-
-    // macOS draws menu bar icons as templates it tints itself for light and dark menu bars; Windows
-    // taskbars and Linux panels get the colour icon, on its own tile so it reads on either theme.
-    // Both come from branding/build.py.
-    let mac = cfg!(target_os = "macos");
-    let image = if mac {
-        tauri::include_image!("../branding/icons/tray-template.png")
-    } else {
-        tauri::include_image!("../branding/icons/tray.png")
-    };
-    let icon = TrayIconBuilder::with_id(TRAY_ID)
-        .icon(image)
-        .icon_as_template(mac)
-        .tooltip("Arcus")
-        .menu(&menu)
-        // macOS convention: a click on a menu bar icon opens its menu. On Windows a left click opens
-        // the window and the right click the menu. Linux panels always show the menu and send no clicks.
-        .show_menu_on_left_click(mac)
-        .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
-                if !cfg!(target_os = "macos") {
-                    show_main_window(tray.app_handle());
-                }
-            }
-        })
-        .build(app)
-        .map_err(|e| e.to_string())?;
-    Ok(Tray { icon, status, pause })
-}
-
 /// Linux: the tray goes through libappindicator, which Tauri loads at run time and aborts the whole app
 /// when it is missing (with `panic = "abort"` there is nothing to catch). So look for it first, under
 /// every name that loader (libappindicator-sys 0.9 with its `backcompat` feature, which tray-icon turns
 /// on) tries: the unversioned names are what some bundles, AppImages above all, ship.
 #[cfg(target_os = "linux")]
-fn tray_host_available() -> bool {
+pub fn tray_host_available() -> bool {
     [
         "libayatana-appindicator3.so.1",
         "libappindicator3.so.1",
@@ -331,76 +248,8 @@ fn tray_host_available() -> bool {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn tray_host_available() -> bool {
+pub fn tray_host_available() -> bool {
     true
-}
-
-fn running_text(count: usize) -> String {
-    match count {
-        0 => "No transfers running".to_string(),
-        1 => "1 transfer running".to_string(),
-        n => format!("{n} transfers running"),
-    }
-}
-
-async fn tray_refresh_loop(app: AppHandle, generation: u64) {
-    loop {
-        {
-            let state = app.state::<BackgroundState>();
-            if state.tray_generation.load(Ordering::SeqCst) != generation {
-                return;
-            }
-        }
-        update_tray(&app).await;
-        tokio::time::sleep(TRAY_REFRESH).await;
-    }
-}
-
-async fn update_tray(app: &AppHandle) {
-    // Every transfer, started by hand or by a watch folder, runs in its own transfer daemon.
-    let running = app.state::<AppState>().transfer_daemons.list().await.len();
-    let paused = crate::watch::is_paused(app);
-    let text = running_text(running);
-    let handle = app.clone();
-    // Menu items are changed on the main thread; doing it there directly also avoids waiting on it
-    // from here while the main thread might wait on the tray lock.
-    let _ = app.run_on_main_thread(move || {
-        let state = handle.state::<BackgroundState>();
-        let tray = state.tray.lock().unwrap();
-        let Some(tray) = tray.as_ref() else {
-            return;
-        };
-        // A click on the check item flips it at once; this puts it back to what the engine says.
-        if tray.pause.is_checked().ok() != Some(paused) {
-            let _ = tray.pause.set_checked(paused);
-        }
-        let mut last = state.last_status.lock().unwrap();
-        if *last != text {
-            let _ = tray.status.set_text(&text);
-            let tooltip = if running == 0 { "Arcus".to_string() } else { format!("Arcus: {text}") };
-            let _ = tray.icon.set_tooltip(Some(tooltip));
-            *last = text;
-        }
-    });
-}
-
-fn on_menu_event(app: &AppHandle, event: MenuEvent) {
-    match event.id().as_ref() {
-        MENU_OPEN => show_main_window(app),
-        MENU_PAUSE => {
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                let paused = !crate::watch::is_paused(&app);
-                if let Err(err) = crate::watch::set_paused(&app, paused).await {
-                    log::warn!("could not pause or resume watch folders from the tray: {err}");
-                }
-                update_tray(&app).await;
-            });
-        }
-        // A real quit: the Exit run event stops running transfers and the rclone daemon.
-        MENU_QUIT => app.exit(0),
-        _ => {}
-    }
 }
 
 // ---------------------------------------------------------------------------------------------------

@@ -543,7 +543,10 @@ export const useJobsStore = create<JobsStore>((set, get) => {
       // rclone's log and its bandwidth limit are per process, not per job. In an rclone of its own, a
       // transfer's log says what that transfer is doing, and a limit throttles it alone and ends with it.
       let daemon: TransferDaemonInfo | null = null;
-      if (!input.shared || input.log || input.bwlimit) daemon = await api.transferDaemonStart(input.title, input.log?.level);
+      if (!input.shared || input.log || input.bwlimit) {
+        const route = input.destination ? `${input.source} → ${input.destination}` : input.source;
+        daemon = await api.transferDaemonStart(input.title, input.log?.level, route);
+      }
       try {
         if (daemon) for (const [block, values] of sessionOptionsForTransfers()) await rc.optionsSet(block, values, daemon.id);
         if (input.bwlimit) await rc.bwlimit(input.bwlimit, daemon?.id);

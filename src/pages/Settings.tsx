@@ -29,6 +29,7 @@ import { LogViewerDialog } from "../components/app/LogViewer";
 import { MacPermissionsList } from "../components/app/MacPermissions";
 import { ProvisionProgress, useProvisionEvents } from "../components/app/Provision";
 import { BrandMark } from "../components/app/Brand";
+import { useUpdatesStore } from "../store/updates";
 import {
   Button,
   Callout,
@@ -777,7 +778,7 @@ function BackgroundCard() {
     });
 
   const bg = status.data;
-  const trayMissing = s.runInBackground && bg && !bg.trayAvailable;
+  const trayMissing = (s.runInBackground || s.showTrayIcon) && bg && !bg.trayAvailable;
   const loginMissing = s.launchAtLogin && bg && !bg.launchAtLoginRegistered;
 
   return (
@@ -795,6 +796,16 @@ function BackgroundCard() {
         }
       >
         <Switch checked={s.runInBackground} onChange={(v) => save({ runInBackground: v })} />
+      </SettingRow>
+      <SettingRow
+        title={mac ? "Show in the menu bar" : "Show in the system tray"}
+        description={
+          s.runInBackground
+            ? `Always on while Arcus keeps running with its window closed: the icon is the way back in. Its menu lists running transfers with their progress.`
+            : `An icon whose menu lists running transfers with their progress, and can stop them or open Arcus.`
+        }
+      >
+        <Switch checked={s.showTrayIcon || s.runInBackground} disabled={s.runInBackground} onChange={(v) => save({ showTrayIcon: v })} />
       </SettingRow>
       <SettingRow
         title="Open at login"
@@ -1273,6 +1284,7 @@ function AboutCard() {
   return (
     <SectionCard icon={<Info />} title="About" description="This build of Arcus and the rclone it is running." bodyClassName="flex flex-col gap-4">
       <RcloneCredit />
+      <UpdatesRow />
       <KeyValue
         items={[
           { label: "Arcus", value: info?.version ?? "–" },
@@ -1310,6 +1322,59 @@ function AboutCard() {
         <pre className="selectable overflow-x-auto rounded-lg bg-terminal p-3 font-mono text-xs text-terminal-fg">{JSON.stringify(version.data, null, 2)}</pre>
       )}
     </SectionCard>
+  );
+}
+
+/** Which version this is, whether a newer one exists, and the switch for checking by itself. */
+function UpdatesRow() {
+  const settings = useAppStore((s) => s.settings);
+  const saveSettings = useAppStore((s) => s.saveSettings);
+  const status = useUpdatesStore((s) => s.status);
+  const check = useUpdatesStore((s) => s.check);
+  const openDialog = useUpdatesStore((s) => s.openDialog);
+  const { run } = useAsyncAction();
+  const s = settings ?? defaultSettings;
+
+  const state = status?.state;
+  const checked = status?.checkedAtUnix ? ` Checked ${formatDateTime(status.checkedAtUnix)}.` : "";
+  const summary =
+    state === "checking"
+      ? "Checking GitHub for a newer version…"
+      : state === "available" || ((state === "downloading" || state === "installing") && status?.version)
+        ? `Arcus ${status?.version} is available.${checked}`
+        : state === "upToDate"
+          ? `Arcus ${status?.currentVersion} is the latest version.${checked}`
+          : state === "error"
+            ? (status?.error ?? "The last check failed.")
+            : "Arcus looks for a newer version on GitHub.";
+
+  return (
+    <div className="flex flex-col rounded-lg border border-border px-4 py-1">
+      <SettingRow title="Updates" description={summary}>
+        {status?.version && state !== "upToDate" ? (
+          <Button size="sm" variant="default" icon={<Download />} onClick={openDialog}>
+            Update…
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            icon={<RefreshCw />}
+            loading={state === "checking"}
+            onClick={() =>
+              run("Could not check for updates", async () => {
+                const next = await check();
+                if (next.state === "available") openDialog();
+              })
+            }
+          >
+            Check now
+          </Button>
+        )}
+      </SettingRow>
+      <SettingRow title="Check for updates automatically" description="When Arcus starts and every six hours after. Updates are only installed when you say so.">
+        <Switch checked={s.checkUpdatesOnStart} onChange={(v) => run("Could not save", () => saveSettings({ checkUpdatesOnStart: v }))} />
+      </SettingRow>
+    </div>
   );
 }
 
