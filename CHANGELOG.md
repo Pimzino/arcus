@@ -2,6 +2,13 @@
 
 Every release of Arcus, newest first, with the commits it added since the release before it.
 
+## v0.8.0 (2026-09-29)
+
+- Buttons keep their size and colour while loading ([242afd9](https://github.com/Pimzino/arcus/commit/242afd9c24f0739e9d3fcf58b3b65bae5074aae6))
+- macOS permissions: the guide comes first, Arcus is listed in every pane, and grants survive updates ([3dcbbd3](https://github.com/Pimzino/arcus/commit/3dcbbd34e58227f675e52b6031696644bf68235a))
+
+All changes: [v0.7.2...v0.8.0](https://github.com/Pimzino/arcus/compare/v0.7.2...v0.8.0)
+
 ## v0.7.2 (2026-09-29)
 
 - Background mode, watch folders and email notifications; pnpm; rename leftovers to Arcus ([86dc6d1](https://github.com/Pimzino/arcus/commit/86dc6d1dc799f12165045ca4cff6bad04011b6d0))
