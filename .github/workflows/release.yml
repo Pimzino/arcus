@@ -120,7 +120,8 @@ jobs:
           # each other on the release (updater-manifest.mjs reads the architecture from the name).
           updates=($dir/{msi/*.msi.sig,nsis/*.exe.sig})
           if [ -f "$dir/macos/Arcus.app.tar.gz" ]; then
-            arch=$(case "${{ matrix.target }}" in aarch64-*) echo aarch64 ;; *) echo x86_64 ;; esac)
+            # Not `$(case …)`: macOS runners run bash 3.2, which cannot parse a case inside $( ).
+            if [[ "${{ matrix.target }}" == aarch64-* ]]; then arch=aarch64; else arch=x86_64; fi
             name="Arcus_${GITHUB_REF_NAME#v}_${arch}.app.tar.gz"
             mv "$dir/macos/Arcus.app.tar.gz" "$dir/macos/$name"
             mv "$dir/macos/Arcus.app.tar.gz.sig" "$dir/macos/$name.sig"
