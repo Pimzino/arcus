@@ -2,6 +2,17 @@
 
 Every release of Arcus, newest first, with the commits it added since the release before it.
 
+## v0.7.2 (2026-09-29)
+
+- Background mode, watch folders and email notifications; pnpm; rename leftovers to Arcus ([86dc6d1](https://github.com/Pimzino/arcus/commit/86dc6d1dc799f12165045ca4cff6bad04011b6d0))
+- Linux end-to-end test: find the email fields and the watch folder action by their labels ([e6f3b28](https://github.com/Pimzino/arcus/commit/e6f3b284085277d5038cc835c848fe4657d1ab42))
+- Updates from GitHub releases, running transfers in the menu bar / tray, and quitting without a hang ([0893c4a](https://github.com/Pimzino/arcus/commit/0893c4ad051c699ad89e43af88bea3490fb60145))
+- Background mode: turning it off brings a hidden window back, now that the tray icon stays ([0e62682](https://github.com/Pimzino/arcus/commit/0e62682c2621f9256c8cdbb1859012d41ce9b95e))
+- Linux end-to-end test: close toasts before clicking the Background switches ([dcb6b40](https://github.com/Pimzino/arcus/commit/dcb6b40e8863cf94d4a6a72f6832f5089a48001e))
+- Changelog: v0.7.0 and v0.7.1 were never published (their Linux test failed), so v0.7.2 lists everything since v0.6.1 ([5407194](https://github.com/Pimzino/arcus/commit/54071944d4964d7d85b68b2ffc905f328e53f4bc))
+
+All changes: [v0.6.1...v0.7.2](https://github.com/Pimzino/arcus/compare/v0.6.1...v0.7.2)
+
 ## v0.6.1 (2026-09-28)
 
 - Activity feed: Box's folder-root token refresh message is info, not an error ([16476b8](https://github.com/Pimzino/arcus/commit/16476b870037fa723dba5e45ce383d1cae34708f))
