@@ -211,6 +211,14 @@ async function fill(el, text) {
   }
 }
 /** Switch a switch (role="switch") to `on` with a click, unless it already is. */
+/**
+ * Close every toast. One can sit over the lower right of the page for seconds (a watch folder's run ending,
+ * say) and take a click meant for a switch under it ("element click intercepted").
+ */
+async function dismissToasts() {
+  await run(`document.querySelectorAll('button[aria-label="Dismiss"]').forEach((b) => b.click());`);
+  await sleep(300);
+}
 async function setSwitch(el, on, what) {
   if ((await attr(el, "aria-checked")) !== String(on)) await click(el);
   await waitFor(`${what} to turn ${on ? "on" : "off"}`, async () => (await attr(el, "aria-checked")) === String(on), { timeout: 15_000 });
@@ -516,6 +524,7 @@ try {
   const background = "#settings-background";
   await navTo("Settings");
   await click(await waitFor("the Background section in Settings", () => buttonIn("main nav", "Background")));
+  await dismissToasts();
   const atLogin = await waitFor("the Open at login switch", () => controlFor(background, "Open at login", '[role="switch"]'));
   await setSwitch(atLogin, true, "open at login");
   const entry = await waitFor("the XDG autostart entry", () => existsSync(autostartEntry) && readFileSync(autostartEntry, "utf8"), { timeout: 15_000 });
@@ -531,6 +540,7 @@ try {
   check("turning Open at login off removed the entry", { exists: existsSync(autostartEntry) });
 
   const keepRunning = await need("the Keep running switch", () => controlFor(background, "Keep running when the window is closed", '[role="switch"]'));
+  await dismissToasts();
   await setSwitch(keepRunning, true, "keep running when the window is closed");
   // The tray is made on the main thread just after the setting is saved.
   await sleep(1500);
