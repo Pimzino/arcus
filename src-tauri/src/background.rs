@@ -82,8 +82,9 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
 /// After the settings change: show or hide the tray icon, add or remove the launch-at-login entry.
 pub fn apply(app: &AppHandle, settings: &Settings) {
     crate::tray::apply(app, tray_wanted(settings));
-    // Without the tray a hidden window could not be reached again.
-    if !crate::tray::available(app) && !main_window_visible(app) {
+    // A hidden window comes back when background mode goes off (closing the window quits from now on, so
+    // hidden is no state to stay in; the tray icon may well stay) or when there is no tray to reach it by.
+    if (!settings.run_in_background || !crate::tray::available(app)) && !main_window_visible(app) {
         show_main_window(app);
     }
     sync_launch_at_login(app, false);
