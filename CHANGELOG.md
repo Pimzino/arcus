@@ -2,6 +2,12 @@
 
 Every release of Arcus, newest first, with the commits it added since the release before it.
 
+## v0.7.1 (2026-09-29)
+
+- Background mode: turning it off brings a hidden window back, now that the tray icon stays ([0e62682](https://github.com/Pimzino/arcus/commit/0e62682c2621f9256c8cdbb1859012d41ce9b95e))
+
+All changes: [v0.7.0...v0.7.1](https://github.com/Pimzino/arcus/compare/v0.7.0...v0.7.1)
+
 ## v0.7.0 (2026-09-29)
 
 - Background mode, watch folders and email notifications; pnpm; rename leftovers to Arcus ([86dc6d1](https://github.com/Pimzino/arcus/commit/86dc6d1dc799f12165045ca4cff6bad04011b6d0))
