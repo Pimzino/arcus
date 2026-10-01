@@ -124,15 +124,17 @@ export function TransfersPage() {
           ) : (
             /* The table runs to the card's edges: the card body's own padding is cancelled here. */
             <Card bodyClassName="-mx-4 -my-4">
-              <Table>
+              {/* Fixed layout: columns keep the widths set here (each fits its longest value, e.g. 1023 MiB/s),
+                  so speed and ETA ticking over never resize them and the row never shifts sideways. */}
+              <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-4 text-xs">Status</TableHead>
+                    <TableHead className="w-[112px] px-4 text-xs">Status</TableHead>
                     <TableHead className="px-4 text-xs">Job</TableHead>
-                    <TableHead className="px-4 text-xs">Progress</TableHead>
-                    <TableHead className="px-4 text-xs">Speed</TableHead>
-                    <TableHead className="px-4 text-xs">ETA</TableHead>
-                    <TableHead className="px-4 text-xs text-right">Actions</TableHead>
+                    <TableHead className="w-[182px] px-4 text-xs">Progress</TableHead>
+                    <TableHead className="w-[112px] px-4 text-xs">Speed</TableHead>
+                    <TableHead className="w-[96px] px-4 text-xs">ETA</TableHead>
+                    <TableHead className="w-[100px] px-4 text-xs text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -213,6 +215,7 @@ function JobRow({ job }: { job: TrackedJob }) {
     toast({ tone: "info", title: `${started.title} started`, description: `${started.source} → ${started.destination}` });
   };
   const act = (label: string, fn: () => Promise<unknown>) => () => fn().catch((e) => toast({ tone: "danger", title: label, description: errorMessage(e) }));
+  const isRunning = job.status === "running";
   const currentMode = formFromJob(job).mode;
   const replicable = !!job.rcPath && REPLICABLE.has(job.rcPath);
   const runAsItems: MenuItemDef[] = replicable
@@ -234,7 +237,22 @@ function JobRow({ job }: { job: TrackedJob }) {
     ...(sourceLocal ? [{ label: `Show source in ${fm.name}`, icon: <FolderOpen />, onSelect: () => fm.open(sourceLocal) }] : []),
     ...(destinationLocal ? [{ label: `Show destination in ${fm.name}`, icon: <FolderOpen />, onSelect: () => fm.open(destinationLocal) }] : []),
   ];
+  // The row shows one action beside the menu (stop while running, details once done); the rest live here.
+  const primaryItems: MenuItemDef[] = [
+    ...(isRunning ? [{ label: "Details", icon: <Info />, onSelect: () => setDetails(true) }] : []),
+    ...(!isRunning && job.rcPath
+      ? [
+          {
+            label: job.watchId ? "Run the watch folder now" : "Run again",
+            icon: <RotateCcw />,
+            onSelect: act(job.watchId ? "Could not run the watch folder" : "Could not restart the job", () => retry(job.id)),
+          },
+        ]
+      : []),
+    ...(job.logPath ? [{ label: "View log", icon: <FileText />, onSelect: () => setShowLog(true) }] : []),
+  ];
   const menuItems: MenuItemDef[] = [
+    ...(primaryItems.length ? [...primaryItems, { type: "separator" as const }] : []),
     ...runAsItems,
     ...(showItems.length ? [...showItems, { type: "separator" as const }] : []),
     ...(job.watchId ? [{ label: "Show watch folder", icon: <FolderSync />, onSelect: () => setPage("watch") }, { type: "separator" as const }] : []),
@@ -242,7 +260,6 @@ function JobRow({ job }: { job: TrackedJob }) {
   ];
 
   const s = job.stats;
-  const isRunning = job.status === "running";
   const status = STATUS[job.status];
   const pct = s?.totalBytes ? percent(s.bytes, s.totalBytes) : job.status === "success" ? 100 : 0;
   const tone: Tone = job.status === "error" ? "danger" : job.status === "success" ? "success" : job.status === "stopped" ? "warning" : "accent";
@@ -263,7 +280,7 @@ function JobRow({ job }: { job: TrackedJob }) {
           </Badge>
         </TableCell>
 
-        <TableCell className="w-full max-w-0 px-4 py-3 align-top">
+        <TableCell className="px-4 py-3 align-top">
           <div className="truncate font-semibold" title={job.title}>
             {job.title}
           </div>
@@ -295,18 +312,17 @@ function JobRow({ job }: { job: TrackedJob }) {
         <TableCell className="px-4 py-3 align-top">
           <div className="w-[150px]">
             <ProgressBar size="sm" value={pct} indeterminate={isRunning && !s?.totalBytes} tone={tone} />
-            <div className="tnum mt-1.5 text-xs text-muted-foreground">{transferred}</div>
+            <div className="tnum mt-1.5 truncate text-xs text-muted-foreground" title={transferred}>{transferred}</div>
           </div>
         </TableCell>
 
-        {/* Fixed widths: a long value (rclone reports fractional bytes per second) must not squeeze the job. */}
         <TableCell className="tnum px-4 py-3 align-top text-muted-foreground">
-          <span className="block max-w-[100px] truncate" title={isRunning && s ? formatSpeed(s.speed) : undefined}>
+          <span className="block truncate" title={isRunning && s ? formatSpeed(s.speed) : undefined}>
             {isRunning && s ? formatSpeed(s.speed) : "–"}
           </span>
         </TableCell>
         <TableCell className="tnum px-4 py-3 align-top text-muted-foreground">
-          <span className="block max-w-[72px] truncate">{isRunning && s ? formatEta(s.eta) : "–"}</span>
+          <span className="block truncate">{isRunning && s ? formatEta(s.eta) : "–"}</span>
         </TableCell>
 
         <TableCell className="px-4 py-3 align-top">
@@ -321,22 +337,8 @@ function JobRow({ job }: { job: TrackedJob }) {
                 <Square />
               </IconButton>
             ) : (
-              job.rcPath && (
-                <IconButton
-                  label={job.watchId ? "Run the watch folder now" : "Run again"}
-                  size="sm"
-                  onClick={act(job.watchId ? "Could not run the watch folder" : "Could not restart the job", () => retry(job.id))}
-                >
-                  <RotateCcw />
-                </IconButton>
-              )
-            )}
-            <IconButton label="Details" size="sm" onClick={() => setDetails(true)}>
-              <Info />
-            </IconButton>
-            {job.logPath && (
-              <IconButton label="Log" size="sm" onClick={() => setShowLog(true)}>
-                <FileText />
+              <IconButton label="Details" size="sm" onClick={() => setDetails(true)}>
+                <Info />
               </IconButton>
             )}
             <Menu items={menuItems} align="end" minWidth={300}>
