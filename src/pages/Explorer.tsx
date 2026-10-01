@@ -66,6 +66,8 @@ type DragPayload = { pane: number; loc: Location; entries: Entry[] };
 
 const DRAG_TYPE = "application/x-arcus";
 let dragPayload: DragPayload | null = null;
+/** Whether a drag is over a row's icon and name, the part of a folder's row that drops into that folder. */
+const overDropName = (e: DragEvent) => e.target instanceof Element && !!e.target.closest("[data-drop-name]");
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
@@ -504,7 +506,8 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
     if (dropTarget !== "") setDropTarget("");
   };
   const onDragOverRow = (item: KeyedItem, e: DragEvent) => {
-    if (!acceptsDrop(e) || !item.IsDir) return;
+    // Only a folder's icon and name take the drop: the rest of its row, like the rest of the pane, drops into the open folder.
+    if (!acceptsDrop(e) || !item.IsDir || !overDropName(e)) return;
     e.preventDefault();
     e.stopPropagation();
     // rclone can't tell same-named folders apart: refuse a drop on one of them rather than guess, or pass it to the folder shown.
@@ -566,7 +569,7 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
     onDragStart,
     onDragOver: onDragOverRow,
     onDrop: (item, e) => {
-      if (item.IsDir) onDrop(shared.has(item.Name) ? null : childLocation(loc, item.Name), e);
+      if (item.IsDir && overDropName(e)) onDrop(shared.has(item.Name) ? null : childLocation(loc, item.Name), e);
     },
   });
 
@@ -588,6 +591,13 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
       className={cn("flex min-w-0 flex-col bg-card", className)}
       onMouseDown={() => setActive(index)}
       aria-label={`Pane ${index + 1}`}
+      // Anywhere in the pane that isn't a folder's name drops into the open folder: the path bar, the toolbar,
+      // the column header, the gaps between rows and the status bar, so it stays reachable when folders fill the list.
+      onDragOver={onDragOverList}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null);
+      }}
+      onDrop={(e) => acceptsDrop(e) && onDrop(loc, e)}
     >
       <div className={cn("shrink-0", isActive ? "bg-card" : "bg-muted/50")}>
         <LocationBar value={loc} onChange={navigate} onRefresh={refresh} loading={listing.isFetching} editSignal={editSignal} />
@@ -635,11 +645,6 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
         className={cn("no-ring relative min-h-0 flex-1 overflow-y-auto overscroll-none outline-none", dropTarget === "" && "ring-2 ring-inset ring-primary/60")}
         onKeyDown={onKeyDown}
         onContextMenu={(e) => loc.fs && ctx.open(e, backgroundMenu())}
-        onDragOver={onDragOverList}
-        onDragLeave={(e) => {
-          if (!list?.contains(e.relatedTarget as Node)) setDropTarget(null);
-        }}
-        onDrop={(e) => onDrop(loc, e)}
         onClick={(e) => {
           if (e.target === e.currentTarget) setSelected(new Set());
         }}
@@ -926,14 +931,16 @@ const FileRow = memo(function FileRow({
       onDragOver={(e) => handlers.onDragOver(item, e)}
       onDrop={(e) => handlers.onDrop(item, e)}
     >
-      <div className="flex min-w-0 items-center gap-2 pl-3">
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-lg border bg-muted/30">
-          <FileIcon name={item.Name} isDir={item.IsDir} />
+      <div className="flex min-w-0 items-center pl-3">
+        <span data-drop-name className="flex min-w-0 items-center gap-2">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-lg border bg-muted/30">
+            <FileIcon name={item.Name} isDir={item.IsDir} />
+          </span>
+          <span className="truncate font-medium" title={item.Name}>
+            {item.Name}
+          </span>
+          {item.IsBucket && <Badge size="sm">bucket</Badge>}
         </span>
-        <span className="truncate font-medium" title={item.Name}>
-          {item.Name}
-        </span>
-        {item.IsBucket && <Badge size="sm">bucket</Badge>}
       </div>
       <div className="tnum pr-3 text-right text-xs text-muted-foreground">{item.IsDir ? "—" : formatBytes(item.Size)}</div>
       <div className="tnum truncate pl-2 text-xs text-muted-foreground">{formatDateTime(item.ModTime)}</div>
