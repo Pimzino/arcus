@@ -2,6 +2,12 @@
 
 Every release of Arcus, newest first, with the commits it added since the release before it.
 
+## v0.8.1 (2026-10-01)
+
+- Transfers: the table no longer shifts as speeds change, and each row shows one action beside its menu ([dc79e14](https://github.com/Pimzino/arcus/commit/dc79e14a25df89a09b9d69262eb3563dffd7e9e5))
+
+All changes: [v0.8.0...v0.8.1](https://github.com/Pimzino/arcus/compare/v0.8.0...v0.8.1)
+
 ## v0.8.0 (2026-09-29)
 
 - Buttons keep their size and colour while loading ([242afd9](https://github.com/Pimzino/arcus/commit/242afd9c24f0739e9d3fcf58b3b65bae5074aae6))
