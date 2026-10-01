@@ -380,6 +380,8 @@ try {
   await navTo("Settings");
   await click(await waitFor("the Email notifications section in Settings", () => buttonIn("main nav", "Email notifications")));
   const enabled = await waitFor("the Send email notifications switch", () => controlFor(email, "Send email notifications", '[role="switch"]'));
+  // The copy's toast from step 3 can still be over this switch.
+  await dismissToasts();
   await setSwitch(enabled, true, "email notifications");
   // Security first: choosing None moves the default port to 25, and the port is set after it.
   const security = await waitFor("the security choice", () => elementIn(email, 'select[aria-label="Security"]'));
