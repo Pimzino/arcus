@@ -2,6 +2,12 @@
 
 Every release of Arcus, newest first, with the commits it added since the release before it.
 
+## v0.8.2 (2026-10-01)
+
+- Explorer: a drop can reach the open folder when its subfolders fill the list ([78193be](https://github.com/Pimzino/arcus/commit/78193be9e8ed0bb9d57126052a2ba843761c81d5))
+
+All changes: [v0.8.1...v0.8.2](https://github.com/Pimzino/arcus/compare/v0.8.1...v0.8.2)
+
 ## v0.8.1 (2026-10-01)
 
 - Transfers: the table no longer shifts as speeds change, and each row shows one action beside its menu ([dc79e14](https://github.com/Pimzino/arcus/commit/dc79e14a25df89a09b9d69262eb3563dffd7e9e5))

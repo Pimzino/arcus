@@ -1,6 +1,6 @@
 [package]
 name = "arcus"
-version = "0.8.1"
+version = "0.8.2"
 description = "Cross-platform desktop GUI for rclone"
 authors = ["Pimzino"]
 license = "GPL-3.0-only"
