@@ -114,7 +114,20 @@ jobs:
             APPLE_SIGNING_IDENTITY="$(scripts/macos-signing-keychain.sh "$RUNNER_TEMP/arcus-signing.keychain-db")"
             export APPLE_SIGNING_IDENTITY
           fi
-          pnpm tauri build --target ${{ matrix.target }} --config '{"bundle":{"createUpdaterArtifacts":true}}'
+          build=(pnpm tauri build --target ${{ matrix.target }} --config '{"bundle":{"createUpdaterArtifacts":true}}')
+          # On the Mac runners hdiutil sometimes fails to make the .dmg because a macOS service holds the disk
+          # image ("Resource busy", actions/runner-images#7522). Building again only redoes the bundling, as the
+          # compiled app is kept; the retries run verbose so the hdiutil error is in the log.
+          if [ "$RUNNER_OS" = macOS ]; then
+            for attempt in 1 2 3; do
+              if [ $attempt -eq 1 ]; then "${build[@]}" && break; else "${build[@]}" --verbose && break; fi
+              if [ $attempt -eq 3 ]; then exit 1; fi
+              echo "::warning::Bundling failed (attempt $attempt of 3); trying again."
+              sleep 20
+            done
+          else
+            "${build[@]}"
+          fi
           if [ "$RUNNER_OS" = macOS ]; then
             app="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Arcus.app"
             requirement="$(codesign --display --requirements - "$app" 2>/dev/null)"
