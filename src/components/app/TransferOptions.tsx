@@ -2,10 +2,12 @@
 // and back, and the sections that edit them. The transfer dialog and the watch folder editor both use them,
 // so a watch folder can do everything a transfer started by hand can.
 
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, ListChecks } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import type { Location } from "../../lib/paths";
+import { formatLocation, type Location } from "../../lib/paths";
 import { Button, Checkbox, ChoiceGrid, Field, FormGrid, Input, Select, Textarea, cn } from "../ui";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { FilterPickerDialog } from "./FilterPicker";
 
 export type Mode = "copy" | "sync" | "move" | "bisync" | "check";
 
@@ -401,6 +403,8 @@ export function TransferOptionSections({
     form.extraFilter.trim() && "raw",
   ].filter(Boolean);
   const unused = excludeSuggestions?.filter((p) => !excludes.includes(p)) ?? [];
+  const [picking, setPicking] = useState(false);
+  const sourceName = form.mode === "bisync" ? "Path 1" : "the source";
 
   return (
     <>
@@ -540,6 +544,40 @@ export function TransferOptionSections({
         summary={filterSet.join(" · ") || "none"}
         defaultOpen={watch}
       >
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-dashed border-border px-3 py-2.5">
+          <div className="min-w-0 flex-1 basis-60">
+            <div className="font-medium">Pick from {sourceName}</div>
+            <div className="text-muted-foreground">
+              {form.src.fs ? (
+                <>
+                  Tick the files and folders to take in, in{" "}
+                  <span className="font-mono text-xs [word-break:normal] wrap-anywhere">{formatLocation(form.src)}</span>. The rules are written below.
+                </>
+              ) : (
+                `Choose ${sourceName} first, then tick the files and folders to take in.`
+              )}
+            </div>
+          </div>
+          <Button icon={<ListChecks />} disabled={!form.src.fs} onClick={() => setPicking(true)}>
+            Choose files and folders…
+          </Button>
+        </div>
+        {picking && (
+          <ErrorBoundary where="filter picker" onClose={() => setPicking(false)}>
+            <FilterPickerDialog
+              open
+              source={form.src}
+              include={includes}
+              exclude={excludes}
+              onClose={() => setPicking(false)}
+              onApply={(r) => {
+                set("include", r.include);
+                set("exclude", r.exclude);
+                setPicking(false);
+              }}
+            />
+          </ErrorBoundary>
+        )}
         <FormGrid>
           <Field layout="grid" label="Include" help="e.g. *.jpg or /Photos/**. Empty: everything.">
             <Textarea mono rows={3} value={form.include} onChange={(e) => set("include", e.target.value)} />

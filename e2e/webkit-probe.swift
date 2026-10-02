@@ -4,6 +4,7 @@
 // Screen Recording or Accessibility permission.
 //
 // usage: webkit-probe <url> <seed.js> <outdir> <width> <height> <phase1.js> [phase2.js ...]
+// env: PROBE_TIMEOUT=<seconds> for the whole run (default 120)
 import AppKit
 import WebKit
 
@@ -67,5 +68,7 @@ final class Driver: NSObject, WKNavigationDelegate {
 
 let driver = Driver(frame: NSRect(x: 0, y: 0, width: width, height: height))
 driver.web.load(URLRequest(url: url))
-DispatchQueue.main.asyncAfter(deadline: .now() + 120) { print("timeout"); exit(2) }
+// PROBE_TIMEOUT (seconds) for tests whose phases wait on real work, such as transfers.
+let timeout = Double(ProcessInfo.processInfo.environment["PROBE_TIMEOUT"] ?? "") ?? 120
+DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { print("timeout"); exit(2) }
 app.run()

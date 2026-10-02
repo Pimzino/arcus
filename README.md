@@ -83,7 +83,8 @@ Your rclone config is rclone's own file and is not touched either.
 * **Remotes** for every rclone backend, with forms built from rclone's own option metadata, and a browser
   sign-in step for OAuth providers such as Google Drive, OneDrive, Dropbox and Box.
 * **Transfers:** copy, sync, move, bisync and check, with dry run, filters, bandwidth limits, parallelism and
-  more. Live per-file progress and ETA, what a job is busy with when the numbers stand still, a list of
+  more. Filters can be picked from the source's folders as a tree: tick what to take in and Arcus writes the
+  rclone rules. Live per-file progress and ETA, what a job is busy with when the numbers stand still, a list of
   everything it did, and re-runs as they were, as another operation or with changes.
 * **A log per transfer.** Each transfer runs in an rclone of its own and keeps that rclone's log, cleaned up
   after 30 days by default.
