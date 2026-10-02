@@ -2,6 +2,12 @@
 
 Every release of Arcus, newest first, with the commits it added since the release before it.
 
+## v0.9.1 (2026-10-02)
+
+- The status bar shows the Arcus version and a newer one, in place of the sidebar's update button ([80874b4](https://github.com/Pimzino/arcus/commit/80874b421da4bf2d2307ea965a027d4e1d5570f3))
+
+All changes: [v0.9.0...v0.9.1](https://github.com/Pimzino/arcus/compare/v0.9.0...v0.9.1)
+
 ## v0.9.0 (2026-10-02)
 
 - Linux end-to-end test: close the copy's toast before the email notifications switch ([45b7582](https://github.com/Pimzino/arcus/commit/45b758213e4e74a7514f136cc4508bcb82818cc5))
