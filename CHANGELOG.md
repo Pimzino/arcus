@@ -2,6 +2,15 @@
 
 Every release of Arcus, newest first, with the commits it added since the release before it.
 
+## v0.9.0 (2026-10-02)
+
+- Linux end-to-end test: close the copy's toast before the email notifications switch ([45b7582](https://github.com/Pimzino/arcus/commit/45b758213e4e74a7514f136cc4508bcb82818cc5))
+- Release: retry the macOS bundling when hdiutil cannot make the .dmg ([3e3c96e](https://github.com/Pimzino/arcus/commit/3e3c96e2fa809cdddcaa1bd8c9b0ee08ac970ed6))
+- A crash in the window shows its error in place and is written to the app log ([ddb52e1](https://github.com/Pimzino/arcus/commit/ddb52e1b18b450de1ce2c68b9184eed8763e04f3))
+- Transfers and watch folders: pick filters by ticking files and folders in the source ([33cbba5](https://github.com/Pimzino/arcus/commit/33cbba5f8bbf65112c985c93c2fd921feb72f545))
+
+All changes: [v0.8.2...v0.9.0](https://github.com/Pimzino/arcus/compare/v0.8.2...v0.9.0)
+
 ## v0.8.2 (2026-10-01)
 
 - Explorer: a drop can reach the open folder when its subfolders fill the list ([78193be](https://github.com/Pimzino/arcus/commit/78193be9e8ed0bb9d57126052a2ba843761c81d5))
