@@ -6,8 +6,9 @@
 //   node e2e/update-ui.mjs
 //
 // Ways it could go wrong, which it looks for:
-//   - "Check now" does nothing visible, or finds an update without offering it (no dialog, no sidebar button,
-//     no notice);
+//   - the status bar does not say which Arcus this is, or its version cell does not open the update dialog;
+//   - "Check now" does nothing visible, or finds an update without offering it (no dialog, no status bar
+//     button, no notice);
 //   - the dialog shows raw Markdown or the changelog's commit links instead of the list of changes;
 //   - installing shows no progress, or the progress does not move, or the app never restarts;
 //   - an update whose signature fails leaves the dialog spinning instead of saying why;
@@ -69,6 +70,7 @@ const button = (text, root = document) => $$("button", root).find((b) => b.textC
 const dialog = () => document.querySelector('[role=dialog]');
 const text = (el) => (el ? el.innerText.replace(/\\s+/g, " ").trim() : null);
 const row = (title) => $$("div").find((d) => d.children.length === 2 && d.firstElementChild?.firstElementChild?.textContent === title);
+const statusCell = (start) => $$("footer button").find((b) => b.textContent.trim().startsWith(start));
 async function openSettings() {
   const nav = $$("aside button").find((b) => b.textContent.trim().startsWith("Settings"));
   nav.click();
@@ -123,8 +125,18 @@ try {
         tray: text(tray),
         traySwitch: tray?.querySelector('[role=switch]')?.getAttribute('aria-checked'),
         trayDisabled: tray?.querySelector('[role=switch]')?.disabled,
-        sidebarUpdate: $$("aside button").some((b) => b.textContent.includes("Update to")),
+        statusUpdate: !!statusCell("Update to"),
+        statusVersion: text(statusCell("Arcus")),
       });`,
+    ],
+    [
+      "1b-version-opens-dialog",
+      `statusCell("Arcus").click();
+      await sleep(400);
+      const shown = text(dialog());
+      button("Later", dialog())?.click();
+      await sleep(300);
+      return JSON.stringify({ dialog: shown, closed: !dialog() });`,
     ],
     [
       "2-found",
@@ -133,7 +145,8 @@ try {
       return JSON.stringify({
         dialog: text(dialog()),
         items: $$("li", dialog()).map((li) => li.textContent),
-        sidebar: text($$("aside button").find((b) => b.textContent.includes("Update to"))),
+        status: text(statusCell("Update to")),
+        statusVersion: text(statusCell("Arcus")),
         notice: $$("body *").some((e) => e.children.length === 0 && e.textContent === "Arcus 0.7.0 is available"),
         updates: text(row("Updates")),
       });`,
@@ -159,11 +172,18 @@ try {
   check("Settings has an Updates row that offers a check", /^Updates Arcus looks for a newer version on GitHub\. Check now$/.test(s1.updates ?? ""), s1.updates);
   check("automatic checks are on by default", s1.auto === "true", s1.auto);
   check("the menu bar icon is on by default and can be turned off", s1.traySwitch === "true" && s1.trayDisabled === false, s1.tray);
-  check("no update button before a check", s1.sidebarUpdate === false, s1.sidebarUpdate);
+  check("the status bar shows the Arcus version", s1.statusVersion === "Arcus 0.1.0-browser", s1.statusVersion);
+  check("no update button before a check", s1.statusUpdate === false, s1.statusUpdate);
+  const s1b = a["1b-version-opens-dialog"];
+  check("the version cell opens the update dialog", /^Arcus updates You have Arcus 0\.1\.0-browser\./.test(s1b.dialog ?? "") && s1b.closed, s1b);
   const s2 = a["2-found"];
   check("the dialog offers Arcus 0.7.0", /^Update to Arcus 0\.7\.0 You have Arcus 0\.1\.0-browser\. Released /.test(s2.dialog ?? "") && /Install and restart$/.test(s2.dialog ?? ""), s2.dialog);
   check("the notes are a clean list", s2.items?.length === 5 && s2.items.every((i) => !/[#[\]()*]/.test(i)), s2.items);
-  check("the sidebar and a notice say so too", s2.sidebar === "Update to 0.7.0" && s2.notice, { sidebar: s2.sidebar, notice: s2.notice });
+  check("the status bar and a notice say so too", s2.status === "Update to 0.7.0" && s2.statusVersion === "Arcus 0.1.0-browser" && s2.notice, {
+    status: s2.status,
+    statusVersion: s2.statusVersion,
+    notice: s2.notice,
+  });
   check("the Updates row says 0.7.0 is available", /Arcus 0\.7\.0 is available\./.test(s2.updates ?? ""), s2.updates);
   const s3 = a["3-downloading"];
   check("installing shows moving progress", s3.first > 0 && s3.second > s3.first && s3.second <= 100, s3);
@@ -180,10 +200,10 @@ try {
       row("Updates")?.scrollIntoView({ block: "center" });
       button("Check now").click();
       await sleep(1500);
-      return JSON.stringify({ updates: text(row("Updates")), dialog: text(dialog()), sidebar: $$("aside button").some((b) => b.textContent.includes("Update to")) });`,
+      return JSON.stringify({ updates: text(row("Updates")), dialog: text(dialog()), status: !!statusCell("Update to") });`,
     ],
   ]))["1-check"];
-  check("with nothing newer the row says it is the latest", /Arcus 0\.1\.0-browser is the latest version\. Checked /.test(n.updates ?? "") && !n.dialog && !n.sidebar, n);
+  check("with nothing newer the row says it is the latest", /Arcus 0\.1\.0-browser is the latest version\. Checked /.test(n.updates ?? "") && !n.dialog && !n.status, n);
 
   // Offline.
   const o = (await runScenario("offline", [

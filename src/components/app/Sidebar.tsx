@@ -7,7 +7,6 @@ import { selectRunningCount, useJobsStore } from "../../store/jobs";
 import { selectWatchErrorCount, useWatchStore } from "../../store/watch";
 import { Badge, Kbd, cn, type Tone } from "../ui";
 import { BrandLockup } from "./Brand";
-import { SidebarUpdateButton } from "./Update";
 
 export const NAV: { page: Page; label: string; icon: ReactNode; shortcut: string }[] = [
   { page: "explorer", label: "Explorer", icon: <FolderOpen />, shortcut: "1" },
@@ -70,7 +69,6 @@ export function Sidebar() {
           />
         ))}
       </nav>
-      <SidebarUpdateButton />
     </aside>
   );
 }

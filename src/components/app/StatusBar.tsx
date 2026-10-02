@@ -1,8 +1,9 @@
-// The window's bottom bar: what rclone is doing right now (daemon, address, pid)
-// and the combined progress of the transfers the UI is running, in the style of
-// an editor status bar. Its height is --statusbar-height in index.css.
+// The window's bottom bar: what rclone is doing right now (daemon, address, pid),
+// the combined progress of the transfers the UI is running, and which Arcus this
+// is (with a newer one, once known), in the style of an editor status bar. Its
+// height is --statusbar-height in index.css.
 
-import { AlertTriangle, ArrowLeftRight, Cpu, Download, FileText, Loader2, Play, Plug, Power, RotateCcw, Settings2 } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, ArrowUpCircle, Cpu, Download, FileText, Loader2, Play, Plug, Power, RotateCcw, Settings2 } from "lucide-react";
 import { useMemo, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { formatBytes, formatDateTime, formatEta, formatSpeed, pluralize } from "../../lib/format";
 import { copyToClipboard } from "../../lib/native";
@@ -10,6 +11,7 @@ import { api } from "../../lib/tauri";
 import { errorMessage } from "../../lib/types";
 import { useAppStore } from "../../store/app";
 import { transferSummary, useJobsStore, type TransferSummary } from "../../store/jobs";
+import { selectUpdateAvailable, useUpdatesStore } from "../../store/updates";
 import { Menu, ProgressBar, StatusDot, Tooltip, cn, toast, type MenuItemDef, type Tone } from "../ui";
 import { LogViewerDialog } from "./LogViewer";
 
@@ -18,6 +20,9 @@ export function StatusBar() {
   const setPage = useAppStore((s) => s.setPage);
   const refreshStatus = useAppStore((s) => s.refreshStatus);
   const jobs = useJobsStore((s) => s.jobs);
+  const appVersion = useAppStore((s) => s.info?.version);
+  const update = useUpdatesStore(selectUpdateAvailable);
+  const openUpdate = useUpdatesStore((s) => s.openDialog);
   const [showLog, setShowLog] = useState(false);
   const transfers = useMemo(() => transferSummary(jobs), [jobs]);
 
@@ -111,6 +116,17 @@ export function StatusBar() {
           <span>No transfers</span>
         </StatusItem>
       )}
+      {update && (
+        <StatusItem tone="primary" tooltip={`Arcus ${update} is available — see what's new`} onClick={openUpdate}>
+          <ArrowUpCircle />
+          <span>Update to {update}</span>
+        </StatusItem>
+      )}
+      {appVersion && (
+        <StatusItem tooltip={update ? `You have Arcus ${appVersion}` : "Check for updates"} onClick={openUpdate}>
+          <span className="tnum">Arcus {appVersion}</span>
+        </StatusItem>
+      )}
       <LogViewerDialog open={showLog} onClose={() => setShowLog(false)} title="rclone daemon log" path="daemon" live />
     </footer>
   );
@@ -123,7 +139,7 @@ function StatusItem({
   className,
   children,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { tooltip?: ReactNode; tone?: "danger" }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { tooltip?: ReactNode; tone?: "danger" | "primary" }) {
   const cell = (
     <button
       type="button"
@@ -133,7 +149,7 @@ function StatusItem({
         "text-xs font-medium whitespace-nowrap transition-all outline-none select-none",
         "hover:bg-muted dark:hover:bg-muted/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
         "[&_svg]:size-3 [&_svg]:shrink-0",
-        tone === "danger" ? "text-destructive" : "hover:text-foreground",
+        tone === "danger" ? "text-destructive" : tone === "primary" ? "text-primary" : "hover:text-foreground",
         className,
       )}
       {...rest}

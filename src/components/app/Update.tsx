@@ -1,4 +1,4 @@
-import { ArrowUpCircle, Download, ExternalLink, RefreshCw } from "lucide-react";
+import { Download, ExternalLink, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatBytes, percent, pluralize } from "../../lib/format";
 import { openExternal } from "../../lib/native";
@@ -39,7 +39,7 @@ function progressText(s: UpdateStatus): string {
 
 /**
  * Announces a newer Arcus once per version and session (a toast), and holds the update dialog, which the
- * toast, the sidebar's button, Settings and the tray all open.
+ * toast, the status bar, Settings and the tray all open.
  */
 export function UpdatePrompt() {
   const load = useUpdatesStore((s) => s.load);
@@ -178,24 +178,5 @@ function UpdateDialog() {
         {error !== null && status?.state !== "error" && <ErrorMessage error={errorMessage(error)} />}
       </div>
     </Dialog>
-  );
-}
-
-/** The sidebar's reminder while a newer version waits. */
-export function SidebarUpdateButton() {
-  const available = useUpdatesStore(selectUpdateAvailable);
-  const openDialog = useUpdatesStore((s) => s.openDialog);
-  if (!available) return null;
-  return (
-    <div className="shrink-0 px-2 pb-2">
-      <button
-        type="button"
-        onClick={openDialog}
-        className="no-ring flex h-8 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-primary transition-colors hover:bg-sidebar-accent focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
-        <ArrowUpCircle className="size-4 shrink-0" />
-        <span className="flex-1 truncate">Update to {available}</span>
-      </button>
-    </div>
   );
 }
