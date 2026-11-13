@@ -2,7 +2,7 @@
 // rclone's log), the settings it ran with, results (e.g. for check jobs) and the raw rc data.
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Copy, FileText, RotateCcw, Square } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleStop, Copy, FileText, RotateCcw } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { isStopError, onlyStopError } from "../../lib/activity";
 import { localPathOf } from "../../lib/fileManager";
@@ -19,10 +19,13 @@ import {
   Callout,
   Card,
   Dialog,
+  GroupLabel,
   KeyValue,
   ProgressBar,
   Segmented,
   Stat,
+  StatStrip,
+  StatusBadge,
   Table,
   TableBody,
   TableCell,
@@ -34,9 +37,11 @@ import {
   type Tone,
 } from "../ui";
 import { ShowPathButton } from "./FileManager";
+import { Arch } from "./Arch";
 import { ActivityCard } from "./JobActivity";
 import { LocationIcon } from "./Location";
 import { LogViewerDialog } from "./LogViewer";
+import { jobProgress } from "./Span";
 import { formFromJob, MODES, type TransferForm } from "./TransferDialog";
 
 const STATUS: Record<TrackedJob["status"], { tone: Tone; label: string }> = {
@@ -167,7 +172,7 @@ function SettingsGrid({ groups }: { groups: SettingGroup[] }) {
     <div className="grid grid-cols-2 gap-x-8 gap-y-5">
       {groups.map((g) => (
         <div key={g.title} className={cn(g.rows.some((r) => typeof r.value !== "string") && "col-span-2")}>
-          <div className="mb-1.5 text-xs font-medium uppercase tracking-widest text-muted-foreground">{g.title}</div>
+          <GroupLabel className="mb-2">{g.title}</GroupLabel>
           <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 text-sm">
             {g.rows.map((r) => (
               <div key={r.label} className="contents">
@@ -230,15 +235,15 @@ function ResultsCard({ job }: { job: TrackedJob }) {
         <Callout tone={o.success ? "success" : "warning"} title={String(o.status ?? (o.success ? "Source and destination match" : "Differences found"))}>
           {o.hashType ? `Compared using ${String(o.hashType)}` : undefined}
         </Callout>
-        <div className="grid grid-cols-4 gap-4">
+        <StatStrip className="grid-cols-4">
           {lists.slice(0, 4).map(([k, label]) => (
             <Stat key={k} label={label} value={String(arr(k).length)} tone={k === "error" && arr(k).length ? "danger" : undefined} />
           ))}
-        </div>
+        </StatStrip>
         {lists.map(([k, label]) =>
           arr(k).length ? (
             <div key={k}>
-              <div className="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground">{label}</div>
+              <GroupLabel className="mb-1">{label}</GroupLabel>
               <StringList items={arr(k)} />
             </div>
           ) : null,
@@ -254,9 +259,9 @@ function ResultsCard({ job }: { job: TrackedJob }) {
       {scalars.length > 0 && <KeyValue items={scalars.map(([k, v]) => ({ label: k, value: String(v), mono: false }))} />}
       {arrays.map(([k, v]) => (
         <div key={k}>
-          <div className="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+          <GroupLabel className="mb-1">
             {k} · {pluralize((v as unknown[]).length, "item")}
-          </div>
+          </GroupLabel>
           <StringList items={(v as unknown[]).map((x) => (typeof x === "object" ? JSON.stringify(x) : String(x)))} />
         </div>
       ))}
@@ -327,6 +332,16 @@ function PathValue({ path, mode, icon }: { path: string; mode: "reveal" | "open"
   );
 }
 
+/** A count among a job's statistics: a small label over its figure. */
+function Count({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
+  return (
+    <div>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className={cn("text-base font-medium", danger && "text-destructive")}>{value}</dd>
+    </div>
+  );
+}
+
 export function JobDetailsDialog({ job, onClose }: { job: TrackedJob; onClose: () => void }) {
   const [showLog, setShowLog] = useState(false);
   const stop = useJobsStore((s) => s.stop);
@@ -349,7 +364,6 @@ export function JobDetailsDialog({ job, onClose }: { job: TrackedJob; onClose: (
         : job.kind === "other"
           ? "rclone job"
           : job.kind;
-  const pct = s?.totalBytes ? percent(s.bytes, s.totalBytes) : job.status === "success" ? 100 : 0;
   const transferring = s?.transferring ?? [];
   // Stopping a job ends the request in flight, which rclone reports as the job's error.
   const stopped = job.status === "stopped";
@@ -376,7 +390,7 @@ export function JobDetailsDialog({ job, onClose }: { job: TrackedJob; onClose: (
             {isRunning ? (
               <Button
                 variant="destructive"
-                icon={<Square />}
+                icon={<CircleStop />}
                 disabled={job.stopRequested}
                 onClick={() => void stop(job.id).catch((e) => toast({ tone: "danger", title: "Could not stop the job", description: errorMessage(e) }))}
               >
@@ -400,16 +414,28 @@ export function JobDetailsDialog({ job, onClose }: { job: TrackedJob; onClose: (
           </>
         }
       >
+        {/* How it ended badly comes before everything else. */}
+        {job.error &&
+          !isRunning &&
+          (stopped && isStopError(job.error) ? (
+            <Callout tone="neutral" title="You stopped this job while rclone was busy">
+              {job.error}
+            </Callout>
+          ) : (
+            <Callout tone="danger" title={job.status === "error" ? "This job failed" : "This job ended with an error"}>
+              {job.error}
+            </Callout>
+          ))}
+
         <Card title="Overview" bodyClassName="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={status.tone}>
-              {isRunning && <span className="size-2 shrink-0 animate-pulse rounded-full bg-current" aria-hidden />}
+            <StatusBadge tone={status.tone} pulse={isRunning} className="mr-1">
               {status.label}
-            </Badge>
+            </StatusBadge>
             <Badge>{operation}</Badge>
             {form?.dryRun && <Badge tone="warning">dry run</Badge>}
             {job.logPath && (
-              <Badge tone="info">
+              <Badge>
                 <FileText /> log file
               </Badge>
             )}
@@ -426,13 +452,6 @@ export function JobDetailsDialog({ job, onClose }: { job: TrackedJob; onClose: (
                 value: s ? formatDuration(s.elapsedTime) : job.finishedAt ? `about ${formatDuration((job.finishedAt - job.createdAt) / 1000)}` : "–",
                 mono: false,
               },
-              ...(job.error && job.status !== "running"
-                ? [
-                    stopped && isStopError(job.error)
-                      ? { label: "Interrupted", value: <span className="text-muted-foreground">You stopped the job while rclone was busy with this: {job.error}</span>, mono: false }
-                      : { label: "Error", value: <span className="text-destructive">{job.error}</span>, mono: false },
-                  ]
-                : []),
               ...(job.logPath ? [{ label: "Log file", value: <PathValue path={job.logPath} mode="reveal" /> }] : []),
             ]}
           />
@@ -445,27 +464,35 @@ export function JobDetailsDialog({ job, onClose }: { job: TrackedJob; onClose: (
         >
           {s ? (
             <>
-              <ProgressBar
-                value={pct}
-                indeterminate={isRunning && !s.totalBytes}
-                tone={job.status === "error" ? "danger" : job.status === "success" ? "success" : job.status === "stopped" ? "warning" : "accent"}
-              />
-              <div className="grid grid-cols-4 gap-4">
-                <Stat label="Transferred" value={formatBytes(s.bytes)} hint={s.totalBytes ? `of ${formatBytes(s.totalBytes)}` : undefined} />
-                <Stat label="Files" value={`${s.transfers}${s.totalTransfers ? ` / ${s.totalTransfers}` : ""}`} />
-                <Stat label="Checks" value={`${s.checks}${s.totalChecks ? ` / ${s.totalChecks}` : ""}`} />
-                <Stat
-                  label="Errors"
-                  value={String(onlyStopError(job) ? 0 : s.errors)}
-                  tone={s.errors && !onlyStopError(job) ? "danger" : undefined}
-                  hint={onlyStopError(job) ? "besides the stop" : undefined}
-                />
-                <Stat label={isRunning ? "Speed" : "Average speed"} value={formatSpeed(isRunning ? s.speed : s.elapsedTime ? s.bytes / s.elapsedTime : 0)} />
-                <Stat label="Elapsed" value={formatDuration(s.elapsedTime)} hint={isRunning ? `ETA ${formatEta(s.eta)}` : undefined} />
-                <Stat label="Deleted" value={String(s.deletes)} hint={s.deletedDirs ? `${s.deletedDirs} folders` : undefined} />
-                <Stat label="Renamed" value={String(s.renames)} hint={s.serverSideCopies || s.serverSideMoves ? `${s.serverSideCopies} server-side copies` : undefined} />
+              {/* The arch stands whole over a job that finished, part built over one still running, and grey
+                  where the work stopped short. */}
+              <div className="flex items-center gap-10 py-2">
+                <Arch className="w-44" label="Progress of this job" {...jobProgress(job)} />
+                <div className="min-w-0 flex-1">
+                  <div className="tnum text-4xl leading-10 font-medium tracking-tight">{formatBytes(s.bytes)}</div>
+                  <div className="tnum mt-1 text-sm">
+                    {s.totalBytes ? `${Math.round(percent(s.bytes, s.totalBytes))}% of ${formatBytes(s.totalBytes)}` : "transferred"}
+                    <span className="text-muted-foreground">
+                      {", "}
+                      {formatSpeed(isRunning ? s.speed : s.elapsedTime ? s.bytes / s.elapsedTime : 0)}
+                      {isRunning ? (s.eta != null ? `, ${formatEta(s.eta)} left` : "") : " on average"}
+                    </span>
+                  </div>
+                  {/* The counts in one line. Files, errors and the time always; the rest only when there were any. */}
+                  <dl className="tnum mt-5 flex flex-wrap gap-x-8 gap-y-3">
+                    <Count label="Files" value={`${s.transfers}${s.totalTransfers ? ` of ${s.totalTransfers}` : ""}`} />
+                    {s.checks > 0 && <Count label="Checks" value={`${s.checks}${s.totalChecks ? ` of ${s.totalChecks}` : ""}`} />}
+                    <Count label={onlyStopError(job) ? "Errors besides the stop" : "Errors"} value={String(onlyStopError(job) ? 0 : s.errors)} danger={s.errors > 0 && !onlyStopError(job)} />
+                    {s.deletes > 0 && <Count label={s.deletedDirs ? `Deleted, and ${s.deletedDirs} folders` : "Deleted"} value={String(s.deletes)} />}
+                    {s.renames > 0 && <Count label="Renamed" value={String(s.renames)} />}
+                    {(s.serverSideCopies ?? 0) > 0 && <Count label="Server-side copies" value={String(s.serverSideCopies)} />}
+                    <Count label="Elapsed" value={formatDuration(s.elapsedTime)} />
+                  </dl>
+                </div>
               </div>
+              {/* The job's own error stands at the head of the dialog; this is rclone's last one when it is another. */}
               {s.lastError &&
+                s.lastError !== job.error &&
                 (stopped && isStopError(s.lastError) ? (
                   <Callout tone="neutral" title="Interrupted by the stop">
                     {s.lastError}
@@ -487,28 +514,28 @@ export function JobDetailsDialog({ job, onClose }: { job: TrackedJob; onClose: (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="px-4 text-xs">Name</TableHead>
-                  <TableHead className="px-4 text-xs">Size</TableHead>
-                  <TableHead className="px-4 text-xs">Progress</TableHead>
-                  <TableHead className="px-4 text-xs">Speed</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Size</TableHead>
+                  <TableHead>Progress</TableHead>
+                  <TableHead>Speed</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {transferring.map((t) => (
                   <TableRow key={t.name}>
-                    <TableCell className="w-full max-w-0 px-4 py-2">
+                    <TableCell className="w-full max-w-0">
                       <span className="block truncate font-mono text-xs" title={t.name}>
                         {t.name}
                       </span>
                     </TableCell>
-                    <TableCell className="tnum px-4 py-2 text-muted-foreground">{formatBytes(t.size)}</TableCell>
-                    <TableCell className="px-4 py-2">
-                      <div className="flex w-[160px] items-center gap-2">
+                    <TableCell className="tnum text-muted-foreground">{formatBytes(t.size)}</TableCell>
+                    <TableCell>
+                      <div className="flex w-40 items-center gap-2">
                         <ProgressBar size="sm" value={t.percentage ?? 0} />
                         <span className="tnum w-9 shrink-0 text-right text-xs text-muted-foreground">{t.percentage ?? 0}%</span>
                       </div>
                     </TableCell>
-                    <TableCell className="tnum px-4 py-2 text-muted-foreground">{formatSpeed(t.speed)}</TableCell>
+                    <TableCell className="tnum text-muted-foreground">{formatSpeed(t.speed)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -535,7 +562,7 @@ export function JobDetailsDialog({ job, onClose }: { job: TrackedJob; onClose: (
         <ResultsCard job={job} />
         <RawDataCard job={job} />
       </Dialog>
-      {showLog && job.logPath && <LogViewerDialog open onClose={() => setShowLog(false)} title={`${job.title} — log`} path={job.logPath} live={isRunning} />}
+      {showLog && job.logPath && <LogViewerDialog open onClose={() => setShowLog(false)} title={`Log of ${job.title}`} path={job.logPath} live={isRunning} />}
     </>
   );
 }

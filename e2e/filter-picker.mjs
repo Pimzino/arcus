@@ -181,7 +181,7 @@ const byText = (sel, text, root = document) => $$(sel, root).find((e) => e.textC
 const loaded = (path) => performance.getEntriesByType("resource").map((e) => new URL(e.name)).find((u) => u.pathname === path);
 const { useAppStore } = await import(loaded("/src/store/app.ts").href);
 const dialogs = () => $$('[role=dialog]');
-const transferDialog = () => dialogs().find((d) => d.textContent.includes("Source and destination"));
+const transferDialog = () => dialogs().find((d) => d.querySelector("[data-operation]"));
 const picker = () => dialogs().find((d) => d.querySelector("[role=tree]"));
 async function waitFor(fn, what, ms = 15000) {
   const until = Date.now() + ms;

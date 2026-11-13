@@ -81,13 +81,13 @@ export function StatusBar() {
         </StatusItem>
       </Menu>
       {address && (
-        <StatusItem tooltip="rclone's remote-control address — click to copy" onClick={copy("Address", address)}>
+        <StatusItem tooltip="Copy rclone's remote-control address" onClick={copy("Address", address)}>
           <Plug />
           <span className="tnum font-mono">{address}</span>
         </StatusItem>
       )}
       {pid && (
-        <StatusItem tooltip="rclone's process id — click to copy" onClick={copy("PID", String(pid))}>
+        <StatusItem tooltip="Copy rclone's process ID" onClick={copy("PID", String(pid))}>
           <Cpu />
           <span className="tnum font-mono">pid {pid}</span>
         </StatusItem>
@@ -101,7 +101,7 @@ export function StatusBar() {
       )}
       {transfers.running > 0 ? (
         <StatusItem tooltip={<TransferDetail transfers={transfers} />} onClick={() => setPage("transfers")}>
-          <Loader2 className="animate-spin text-primary" />
+          <Loader2 className="animate-spin text-primary-ink" />
           <span>{pluralize(transfers.running, "transfer")}</span>
           <span className="block w-14">
             <ProgressBar size="sm" value={transfers.percent ?? 0} indeterminate={transfers.percent == null} />
@@ -117,7 +117,7 @@ export function StatusBar() {
         </StatusItem>
       )}
       {update && (
-        <StatusItem tone="primary" tooltip={`Arcus ${update} is available — see what's new`} onClick={openUpdate}>
+        <StatusItem tone="primary" tooltip={`See what's new in Arcus ${update}`} onClick={openUpdate}>
           <ArrowUpCircle />
           <span>Update to {update}</span>
         </StatusItem>
@@ -145,11 +145,11 @@ function StatusItem({
       type="button"
       className={cn(
         // the ghost `xs` button recipe, stretched to the height of the bar
-        "no-ring flex h-full shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-transparent px-2",
-        "text-xs font-medium whitespace-nowrap transition-all outline-none select-none",
-        "hover:bg-muted dark:hover:bg-muted/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+        "no-ring flex h-full shrink-0 cursor-pointer items-center gap-1.5 rounded-sm border border-transparent px-2",
+        "text-xs whitespace-nowrap transition-colors outline-none select-none",
+        "hover:bg-sidebar-accent focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
         "[&_svg]:size-3 [&_svg]:shrink-0",
-        tone === "danger" ? "text-destructive" : tone === "primary" ? "text-primary" : "hover:text-foreground",
+        tone === "danger" ? "text-destructive" : tone === "primary" ? "text-primary-ink" : "hover:text-foreground",
         className,
       )}
       {...rest}

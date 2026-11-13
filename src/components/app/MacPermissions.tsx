@@ -282,10 +282,10 @@ function Row({
 }) {
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 py-4">
-      <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4">{icon}</span>
+      <span className="flex h-5 items-center text-muted-foreground [&_svg]:size-4">{icon}</span>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-sm font-semibold">{title}</span>
+          <span className="text-sm font-medium">{title}</span>
           {tag && <Badge>{tag}</Badge>}
           {status}
         </div>

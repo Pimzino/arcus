@@ -15,6 +15,12 @@ type ExplorerStore = {
   setActive: (index: 0 | 1) => void;
   /** Open a location in the active pane and switch to the explorer. */
   open: (loc: Location) => void;
+  /** How many items each pane has selected and could send across now. */
+  selected: [number, number];
+  setSelectedCount: (index: 0 | 1, count: number) => void;
+  /** A request, made between the panes, for the active pane to send its selection to the other one. */
+  crossing: { mode: "copy" | "move"; n: number } | null;
+  cross: (mode: "copy" | "move") => void;
 };
 
 const STORE_KEY = "explorer";
@@ -65,5 +71,18 @@ export const useExplorerStore = create<ExplorerStore>((set, get) => ({
   open(loc) {
     get().setPane(get().active, loc);
     useAppStore.getState().setPage("explorer");
+  },
+
+  selected: [0, 0],
+  setSelectedCount(index, count) {
+    if (get().selected[index] === count) return;
+    const selected: [number, number] = [...get().selected];
+    selected[index] = count;
+    set({ selected });
+  },
+
+  crossing: null,
+  cross(mode) {
+    set({ crossing: { mode, n: (get().crossing?.n ?? 0) + 1 } });
   },
 }));

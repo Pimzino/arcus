@@ -94,7 +94,7 @@ export function WatchHistoryDialog({ rule, onClose }: { rule: WatchRule; onClose
         <LogViewerDialog
           open
           onClose={() => setLog(null)}
-          title={`${rule.name} — ${formatDateTime(log.startedAtUnix)}`}
+          title={`${rule.name} · ${formatDateTime(log.startedAtUnix)}`}
           path={log.logPath}
           live={log.status === "running"}
         />

@@ -70,7 +70,7 @@ export function ConsolePage() {
     <>
       <PageHeader
         title="Console"
-        description="Run any rclone command through the daemon, or call the rc API directly."
+        description="Run any rclone command through the daemon, or call the rc API directly"
         actions={
           <Segmented
             options={[
@@ -85,10 +85,10 @@ export function ConsolePage() {
       <div className="flex min-h-0 flex-1 flex-col">
         <div ref={outputRef} className="selectable min-h-0 flex-1 overflow-auto overscroll-none border-b bg-terminal px-6 py-4 font-mono text-xs leading-5 text-terminal-fg">
           {lines.length === 0 && (
-            <div className="text-muted-foreground">Output appears here. Commands run with the daemon's rclone binary and config file; long-running commands stream as they go.</div>
+            <div className="text-terminal-fg/60">Output appears here. Commands run with the daemon's rclone binary and config file; long-running commands stream as they go.</div>
           )}
           {lines.map((l) => (
-            <div key={l.id} className={cn("whitespace-pre-wrap break-words", l.kind === "cmd" && "mt-3 text-primary first:mt-0", l.kind === "err" && "text-destructive")}>
+            <div key={l.id} className={cn("whitespace-pre-wrap break-words", l.kind === "cmd" && "mt-3 text-terminal-command first:mt-0", l.kind === "err" && "text-terminal-error")}>
               {l.kind === "cmd" ? `> ${l.text}` : l.text}
             </div>
           ))}

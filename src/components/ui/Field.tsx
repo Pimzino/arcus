@@ -47,7 +47,7 @@ export function Field({
   field?: string;
 }) {
   const labelNode = (
-    <label htmlFor={htmlFor} className="block text-sm font-semibold">
+    <label htmlFor={htmlFor} className="block text-sm font-medium">
       {label}
       {required && <span className="ml-0.5 text-destructive">*</span>}
     </label>

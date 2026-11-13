@@ -26,7 +26,7 @@ export function Breadcrumbs({ items, maxVisible = 4, className }: { items: Crumb
               <Menu items={hidden.map((h) => ({ label: h.label, icon: h.icon, onSelect: h.onClick }))}>
                 <button
                   type="button"
-                  className="no-ring flex size-5 items-center justify-center rounded-md transition-colors hover:text-foreground"
+                  className="no-ring flex size-5 items-center justify-center rounded-sm transition-colors hover:text-foreground"
                   aria-label="Show hidden folders"
                 >
                   <MoreHorizontal className="size-4" />
@@ -45,7 +45,7 @@ export function Breadcrumbs({ items, maxVisible = 4, className }: { items: Crumb
               disabled={!item.onClick}
               aria-current={last ? "page" : undefined}
               className={cn(
-                "no-ring flex min-w-0 items-center gap-1 rounded-md transition-colors [&_svg]:size-3.5",
+                "no-ring flex min-w-0 items-center gap-1 rounded-sm transition-colors [&_svg]:size-3.5",
                 last ? "text-foreground" : "hover:text-foreground",
               )}
             >

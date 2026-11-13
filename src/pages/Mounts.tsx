@@ -13,7 +13,7 @@ import { isTauri } from "../lib/tauri";
 import { errorMessage, type MountPoint } from "../lib/types";
 import { useAppStore, useDaemonRunning } from "../store/app";
 
-/** Cards in the reference rule off their header; our Card has no slot for that line. */
+/** A rule under the card's header, for cards whose body is a form or a list of facts. */
 const cardHeaderRule = "[&>header]:border-b [&>header]:pb-4";
 
 export function MountsPage() {
@@ -44,7 +44,7 @@ export function MountsPage() {
     <>
       <PageHeader
         title="Mounts"
-        description="Expose a remote as a folder or drive that any application can use."
+        description="Expose a remote as a folder or drive that any application can use"
         actions={
           <>
             <Button size="lg" variant="default" icon={<Plus />} disabled={!running} onClick={() => setCreating(true)}>
@@ -82,7 +82,7 @@ export function MountsPage() {
             />
           )}
           {(mounts.data?.length ?? 0) > 0 && (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] items-start gap-6">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
               {mounts.data!.map((m) => (
                 <MountCard key={m.MountPoint} mount={m} onUnmount={() => unmount(m.MountPoint)} />
               ))}
@@ -110,6 +110,7 @@ function MountCard({ mount, onUnmount }: { mount: MountPoint; onUnmount: () => v
   return (
     <Card
       className={cardHeaderRule}
+      bodyClassName="flex-1"
       title={remoteName(parseLocation(mount.Fs)) ?? mount.Fs}
       footer={
         /* Unmount keeps the room the card's one action had; showing the mount is the quieter one beside it.
@@ -135,9 +136,9 @@ function MountCard({ mount, onUnmount }: { mount: MountPoint; onUnmount: () => v
 
 function MountFact({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="space-y-1.5">
-      <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className={cn("selectable break-all text-base font-medium", mono ? "font-mono" : "tnum")}>{value}</dd>
+    <div className="space-y-1">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className={cn("selectable text-sm wrap-anywhere", mono ? "font-mono" : "tnum")}>{value}</dd>
     </div>
   );
 }

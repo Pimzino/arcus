@@ -100,7 +100,7 @@ export function Dialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-(--scrim) p-6 animate-fade-in"
       onMouseDown={(e) => {
         if (closeOnBackdrop && e.target === e.currentTarget) onClose();
       }}
@@ -112,13 +112,13 @@ export function Dialog({
         /* Focused on open when the dialog has nothing to type in, so it takes no focus ring. */
         tabIndex={-1}
         className={cn(
-          "no-ring flex max-h-full w-full flex-col overflow-hidden rounded-xl border bg-background text-sm shadow-lg outline-none animate-scale-in",
+          "no-ring flex max-h-full w-full flex-col overflow-hidden rounded-2xl border bg-popover text-sm text-popover-foreground shadow-dialog outline-none animate-scale-in",
           sizes[size],
         )}
       >
         <header className="flex items-start gap-4 px-6 pt-6 pb-4">
           <div className="grid min-w-0 flex-1 gap-1">
-            <h2 className="font-display text-lg leading-none font-semibold">{title}</h2>
+            <h2 className="font-display text-lg leading-6 font-semibold tracking-tight">{title}</h2>
             {description && <p className="text-sm text-muted-foreground">{description}</p>}
           </div>
           <IconButton label="Close" size="sm" onClick={onClose} className="-mr-2 -mt-1">

@@ -152,7 +152,7 @@ export function MenuSurface({
             data-highlighted={isActive ? "" : undefined}
             data-disabled={item.disabled ? "" : undefined}
             className={cn(
-              "no-ring relative flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none select-none",
+              "no-ring relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-left outline-none select-none",
               "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
               item.danger
                 ? "text-destructive data-[highlighted]:bg-destructive/10 [&_svg]:text-destructive"
@@ -169,7 +169,7 @@ export function MenuSurface({
               {item.checked ? <Check /> : item.icon}
             </span>
             <span className="flex-1 truncate">{item.label}</span>
-            {item.shortcut && <span className="ml-auto pl-4 text-xs tracking-widest text-muted-foreground">{item.shortcut}</span>}
+            {item.shortcut && <span className="ml-auto pl-4 text-xs text-faint-foreground">{item.shortcut}</span>}
           </button>
         );
       })}

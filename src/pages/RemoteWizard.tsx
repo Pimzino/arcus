@@ -7,7 +7,7 @@
 
 import { Check, ChevronDown, ChevronRight, ChevronUp, Copy, ExternalLink, Eye, EyeOff, KeyRound, LogIn } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Badge, Button, Callout, Card, Checkbox, Dialog, ErrorMessage, Field, Input, SearchInput, Select, Spinner, Textarea, cn, toast } from "../components/ui";
+import { Badge, Button, Callout, Card, Checkbox, Dialog, ErrorMessage, Field, GroupLabel, Input, SearchInput, Select, Spinner, Textarea, cn, toast } from "../components/ui";
 import { pluralize } from "../lib/format";
 import { useProviders, type RemoteInfo } from "../lib/hooks";
 import { copyToClipboard, openExternal } from "../lib/native";
@@ -53,7 +53,7 @@ function HelpText({ text, className }: { text: string; className?: string }) {
           <a
             key={i}
             href={part}
-            className="text-primary hover:underline"
+            className="text-primary-ink hover:underline"
             onClick={(e) => {
               e.preventDefault();
               void openExternal(part);
@@ -78,7 +78,7 @@ function OptionHelp({ text }: { text: string }) {
     <span>
       <HelpText text={more && rest ? text : firstLine} />
       {rest && (
-        <button type="button" className="no-ring ml-1 text-primary hover:underline" onClick={() => setMore((m) => !m)}>
+        <button type="button" className="no-ring ml-1 text-primary-ink hover:underline" onClick={() => setMore((m) => !m)}>
           {more ? "less" : "more"}
         </button>
       )}
@@ -140,7 +140,7 @@ export function OptionInput({ option, value, onChange, invalid, autoFocus }: { o
         {examples.map((ex) => (
           <option key={ex.Value} value={ex.Value}>
             {ex.Value || "(empty)"}
-            {ex.Help ? ` — ${ex.Help.split("\n")[0]}` : ""}
+            {ex.Help ? ` · ${ex.Help.split("\n")[0]}` : ""}
           </option>
         ))}
         {!option.Exclusive && !isBool && <option value="__custom__">Other value…</option>}
@@ -509,11 +509,11 @@ export function RemoteWizard({ mode, remote, onClose, onSaved }: { mode: "create
             )}
             {filteredProviders.popular.length > 0 && (
               <>
-                <div className="px-3 pt-1 pb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground">Popular</div>
+                <GroupLabel className="px-3 pt-1 pb-2">Popular</GroupLabel>
                 {filteredProviders.popular.map((p) => (
                   <ProviderRow key={p.Name} p={p} />
                 ))}
-                <div className="px-3 pt-3 pb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground">All providers</div>
+                <GroupLabel className="px-3 pt-6 pb-2">All providers</GroupLabel>
               </>
             )}
             {filteredProviders.rest.map((p) => (
@@ -578,9 +578,9 @@ export function RemoteWizard({ mode, remote, onClose, onSaved }: { mode: "create
                   <p className="text-sm text-muted-foreground">If this remote already has a token, rclone will ask whether to replace it after you save.</p>
                 )}
                 {ownAppFields.length > 0 && (
-                  <div className="border">
+                  <div className="rounded-lg border">
                     <Checkbox
-                      className="px-3 py-2.5"
+                      className="px-3 py-3"
                       label="Use my own OAuth app (client ID and secret)"
                       description={
                         provider.Name === "drive"
@@ -721,7 +721,7 @@ function AuthCard({
       )}
     >
       <span className="flex items-center gap-2 font-medium">
-        <span className={cn(active ? "text-primary" : "text-muted-foreground")}>{icon}</span>
+        <span className={cn(active ? "text-primary-ink" : "text-muted-foreground")}>{icon}</span>
         {title}
         {badge && (
           <Badge size="sm" tone="accent">

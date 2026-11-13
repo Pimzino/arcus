@@ -62,7 +62,7 @@ export function PhaseLine({ job, className }: { job: TrackedJob; className?: str
   const phase = jobPhase(job.stats, job.activity);
   return (
     <div
-      className={cn("flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-primary", className)}
+      className={cn("flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-primary-ink", className)}
       aria-live="off"
     >
       {PHASE_ICONS[phase.key]}

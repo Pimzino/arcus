@@ -98,7 +98,7 @@ export function SettingsPage() {
   const [content, setContent] = useState<HTMLDivElement | null>(null);
   return (
     <>
-      <PageHeader title="Settings" description="Manage the rclone engine, the daemon and global application preferences." />
+      <PageHeader title="Settings" description="The rclone engine, its daemon and how Arcus behaves" />
       <div className="flex min-h-0 flex-1">
         <SectionNav sections={sections} body={body} content={content} />
         <div ref={setBody} className="min-h-0 flex-1 overflow-y-auto overscroll-none px-6 py-6">
@@ -229,7 +229,7 @@ function SectionNav({ sections, body, content }: { sections: typeof SECTIONS; bo
   }, [body, content, sections]);
 
   return (
-    <nav ref={navRef} className="flex w-48 shrink-0 flex-col gap-px border-r p-2">
+    <nav ref={navRef} className="flex w-48 shrink-0 flex-col gap-0.5 border-r p-2">
       {sections.map((s) => (
         <button
           key={s.id}
@@ -237,9 +237,9 @@ function SectionNav({ sections, body, content }: { sections: typeof SECTIONS; bo
           onClick={() => jump(s.id)}
           aria-current={active === s.id ? "true" : undefined}
           className={cn(
-            "no-ring flex h-8 w-full items-center rounded-lg px-3 text-left text-sm transition-colors",
+            "no-ring flex h-8 w-full shrink-0 items-center rounded-lg px-2 text-left text-sm font-medium transition-colors",
             "focus-visible:ring-3 focus-visible:ring-ring/50",
-            active === s.id ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            active === s.id ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground",
           )}
         >
           {s.label}
@@ -282,9 +282,9 @@ function SectionCard({
     <Card bodyClassName="flex flex-col gap-4">
       <header className="grid grid-cols-[1fr_auto] items-start gap-1">
         <div className="min-w-0">
-          <h2 className="flex items-center gap-3">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary [&_svg]:size-4">{icon}</span>
-            <span className="font-display text-xl font-semibold tracking-tight">{title}</span>
+          <h2 className="flex items-center gap-2">
+            <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4">{icon}</span>
+            <span className="font-display text-lg leading-6 font-semibold tracking-tight">{title}</span>
           </h2>
           {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
         </div>
@@ -308,7 +308,7 @@ function SettingGroup({ title, description, children }: { title: string; descrip
   return (
     <div className="flex flex-col gap-4 border-t pt-4">
       <div>
-        <h3 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">{title}</h3>
+        <h3 className="text-base font-medium">{title}</h3>
         {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
       </div>
       {children}
@@ -333,7 +333,7 @@ function SettingField({
 }) {
   const head = (
     <div className="grid content-start gap-0.5">
-      <h3 className="text-base font-semibold">{label}</h3>
+      <h3 className="text-sm font-medium">{label}</h3>
       {description && <p className="text-sm text-muted-foreground">{description}</p>}
     </div>
   );
@@ -447,23 +447,21 @@ function RcloneVersionCard() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-xs">Version</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Installed</TableHead>
-                <TableHead className="text-xs">SHA-256</TableHead>
-                <TableHead className="text-xs">Signed by</TableHead>
-                <TableHead className="text-xs">
-                  <span className="block text-right">Actions</span>
-                </TableHead>
+                <TableHead>Version</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Installed</TableHead>
+                <TableHead>SHA-256</TableHead>
+                <TableHead>Signed by</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {status!.installed.map((v) => (
                 <TableRow key={v.version}>
-                  <TableCell className="font-mono font-semibold">{v.version}</TableCell>
+                  <TableCell className="font-mono font-medium">{v.version}</TableCell>
                   <TableCell>
                     {v.version === runningVersion ? (
-                      <StatusBadge tone="success">running</StatusBadge>
+                      <StatusBadge tone="success">Running</StatusBadge>
                     ) : v.version === activeVersion ? (
                       <StatusBadge tone="accent">active</StatusBadge>
                     ) : (
@@ -1217,7 +1215,7 @@ function GlobalOptionsCard() {
           return (
             <div key={k} className="grid grid-cols-[minmax(0,1fr)_200px_84px] items-center gap-3 border-t py-2 text-sm first:border-t-0">
               <div className="min-w-0">
-                <div className="truncate font-mono text-xs font-semibold" title={option.Help}>
+                <div className="truncate font-mono text-xs font-medium" title={option.Help}>
                   --{option.Name.replace(/_/g, "-")}
                 </div>
                 <div className="truncate text-xs text-muted-foreground" title={option.Help}>
@@ -1296,7 +1294,7 @@ function AboutCard() {
               <span className="flex items-center gap-2">
                 {info?.dataDir}
                 {info && (
-                  <button type="button" className="no-ring text-primary hover:underline" onClick={() => fm.reveal([info.dataDir])} aria-label="Reveal data folder">
+                  <button type="button" className="no-ring text-primary-ink hover:underline" onClick={() => fm.reveal([info.dataDir])} aria-label="Reveal data folder">
                     <FolderOpen className="inline size-3.5" />
                   </button>
                 )}
@@ -1309,7 +1307,7 @@ function AboutCard() {
               <span className="flex items-center gap-2">
                 {info?.logsDir}
                 {info && (
-                  <button type="button" className="no-ring text-primary hover:underline" onClick={() => fm.reveal([info.logsDir])} aria-label="Reveal logs folder">
+                  <button type="button" className="no-ring text-primary-ink hover:underline" onClick={() => fm.reveal([info.logsDir])} aria-label="Reveal logs folder">
                     <FolderOpen className="inline size-3.5" />
                   </button>
                 )}
@@ -1385,7 +1383,7 @@ function RcloneCredit() {
       <BrandMark className="mt-1 h-[30px] w-10 shrink-0 text-foreground" />
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <p className="text-sm font-semibold">Arcus is powered by rclone</p>
+          <p className="text-sm font-medium">Arcus is powered by rclone</p>
           <p className="text-sm text-muted-foreground">
             Every listing, transfer, sync and mount is done by rclone, the official binary from rclone.org, which Arcus downloads and
             verifies for you. rclone is created by Nick Craig-Wood and its contributors and is free software under the MIT licence.

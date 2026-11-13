@@ -273,6 +273,13 @@ node e2e/macos-app.mjs
 # Update UI (macOS): the Settings rows, the notice and the update dialog in WebKit against the dev shim's
 # updater (found, nothing newer, offline, bad signature). Screenshots and report.json in e2e/artifacts/update-ui/.
 node e2e/update-ui.mjs
+# The look (macOS): every screen in WebKit, in the light and the dark theme, against the design's rules
+# (src/index.css): type, corner radii, row heights, contrast of each text colour, and the drawing of two places
+# with a span between them: the logo's arch built stone by stone on Transfers and in a job's details, each job
+# as source, five stones and destination on one line, the explorer's empty pane listing the places to open and
+# the copy and move buttons and seam of stones between its panes, and the new transfer form's two places with
+# the operation's sign between them. Screenshots and report.json in e2e/artifacts/design-redline/.
+node e2e/design-redline.mjs
 ```
 
 ### Developing the UI in a browser
@@ -349,6 +356,7 @@ src-tauri/windows/        NSIS installer hooks (replacing a pre-rename Rclone GU
 scripts/release.mjs       cuts a release: version bump, CHANGELOG.md section, tag (see Releases)
 e2e/linux.mjs             end-to-end test of the real app on Linux, under tauri-driver (see CI)
 e2e/form-layout.mjs       layout test of the forms in WebKit (macOS), with e2e/webkit-probe.swift
+e2e/design-redline.mjs    the design's rules measured on every screen in WebKit (macOS), both themes
 branding/                 logo, icons, fonts and the script that draws them (see Design and brand)
 .github/workflows/        ci.yml (tests), release.yml (bundles for a tag), windows-upgrade.yml
 ```

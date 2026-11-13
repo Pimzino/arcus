@@ -313,7 +313,7 @@ export function FormSection({
     </>
   );
   return (
-    <section className={cn("flex flex-col rounded-xl bg-card text-sm text-card-foreground ring-1 ring-foreground/10", className)}>
+    <section data-card className={cn("flex flex-col rounded-xl bg-card text-sm text-card-foreground ring-1 ring-foreground/10", className)}>
       {collapsible ? (
         <button
           type="button"
@@ -544,7 +544,7 @@ export function TransferOptionSections({
         summary={filterSet.join(" · ") || "none"}
         defaultOpen={watch}
       >
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-dashed border-border px-3 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg bg-muted/60 px-3 py-3">
           <div className="min-w-0 flex-1 basis-60">
             <div className="font-medium">Pick from {sourceName}</div>
             <div className="text-muted-foreground">

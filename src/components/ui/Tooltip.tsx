@@ -181,7 +181,7 @@ export function Tooltip({
             ref={tipRef}
             role="tooltip"
             className={cn(
-              "pointer-events-none fixed z-[70] flex w-fit max-w-xs items-center gap-2 rounded-md bg-foreground px-3 py-1.5 text-xs text-balance text-background animate-fade-in",
+              "pointer-events-none fixed z-[70] flex w-fit max-w-xs items-center gap-2 rounded-md bg-foreground px-2 py-1 text-xs text-balance text-background animate-fade-in",
             )}
             style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999 }}
           >

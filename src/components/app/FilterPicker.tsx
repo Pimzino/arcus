@@ -59,7 +59,7 @@ function TickBox({ state }: { state: CheckState }) {
     <span
       aria-hidden
       className={cn(
-        "flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+        "flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors",
         state === "off" ? "border-input bg-transparent dark:bg-input/30" : "border-primary bg-primary text-primary-foreground",
       )}
     >

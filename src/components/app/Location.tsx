@@ -11,8 +11,8 @@ import { Breadcrumbs, Button, Dialog, EmptyState, ErrorMessage, Field, IconButto
 import { FileIcon } from "./FileIcon";
 
 export function LocationIcon({ loc, className }: { loc: Location; className?: string }) {
-  if (!loc.fs) return <FolderOpen className={cn("size-4 text-muted-foreground", className)} />;
-  return isLocal(loc) ? <HardDrive className={cn("size-4 text-muted-foreground", className)} /> : <Cloud className={cn("size-4 text-primary", className)} />;
+  const Icon = !loc.fs ? FolderOpen : isLocal(loc) ? HardDrive : Cloud;
+  return <Icon className={cn("size-4 text-muted-foreground", className)} />;
 }
 
 /** Menu items listing configured remotes and local starting points. */
@@ -23,7 +23,7 @@ export function useLocationMenuItems(onPick: (loc: Location) => void): MenuItemD
   if (remotes.data?.length) {
     items.push({ type: "label", label: "Remotes" });
     for (const r of remotes.data) {
-      items.push({ label: `${r.name}:`, icon: <Cloud className="text-primary" />, onSelect: () => onPick({ fs: `${r.name}:`, path: "" }) });
+      items.push({ label: `${r.name}:`, icon: <Cloud />, onSelect: () => onPick({ fs: `${r.name}:`, path: "" }) });
     }
   }
   if (roots.data?.length) {
@@ -128,7 +128,7 @@ export function LocationBar({
       ) : (
         <div
           {...dragRegion("false")}
-          className="flex h-7 min-w-0 flex-1 items-center rounded-md px-1 hover:bg-muted/50"
+          className="flex h-7 min-w-0 flex-1 items-center rounded-md px-1 transition-colors hover:bg-accent/60"
           onDoubleClick={() => {
             setText(formatted);
             setEditing(true);
@@ -205,7 +205,7 @@ export function LocationField({
           <Menu items={menuItems} minWidth={220}>
             <button
               type="button"
-              className="no-ring flex h-8 shrink-0 items-center gap-1 rounded-l-md border border-r-0 border-border bg-muted px-2 text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/50"
+              className="no-ring flex h-8 shrink-0 items-center gap-1 rounded-l-lg border border-r-0 border-input bg-muted px-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
               aria-label="Choose a remote or folder"
             >
               <LocationIcon loc={value} />
@@ -314,7 +314,7 @@ export function LocationBrowserDialog({
             <button
               key={d.Path}
               type="button"
-              className="no-ring flex w-full items-center gap-2 px-4 py-1.5 text-left hover:bg-muted focus-visible:bg-muted"
+              className="no-ring flex h-8 w-full items-center gap-2 px-4 text-left hover:bg-muted focus-visible:bg-muted"
               onClick={() => setLoc(childLocation(loc, d.Name))}
             >
               <FileIcon name={d.Name} isDir />

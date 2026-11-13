@@ -9,6 +9,7 @@ import {
   Dialog,
   EmptyState,
   ErrorMessage,
+  GroupLabel,
   IconButton,
   KeyValue,
   Menu,
@@ -26,6 +27,7 @@ import {
   cn,
   toast,
 } from "../components/ui";
+import { Seal } from "../components/app/Seal";
 import { formatBytes, percent } from "../lib/format";
 import { useInvalidate, useProviders, useRemotes, type RemoteInfo } from "../lib/hooks";
 import { rc } from "../lib/rc";
@@ -70,7 +72,7 @@ export function RemotesPage() {
     <>
       <PageHeader
         title="Remotes"
-        description="Storage defined in rclone's config file."
+        description="Storage defined in rclone's config file"
         actions={
           <div className="flex items-center gap-2">
             <SearchInput value={search} onValueChange={setSearch} aria-label="Search remotes" placeholder="Search by name or type" className="w-56" />
@@ -107,41 +109,40 @@ export function RemotesPage() {
           <EmptyState icon={<Search />} title="No matches" description={`No remote matches “${search.trim()}”. Try a different name or type.`} />
         )}
         {(remotes.isLoading || list.length > 0) && (
-          <Card>
-            {/* The card body is padded and the card itself has py-4: the listing spans the whole card. */}
-            <div className="-m-4">
-              <Table>
-                <TableHeader>
+          <Card padded={false} className="overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Usage</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {remotes.isLoading ? (
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="h-12 px-6">Name</TableHead>
-                    <TableHead className="h-12 px-4">Type</TableHead>
-                    <TableHead className="h-12 px-4">Usage</TableHead>
-                    <TableHead className="h-12 px-4 text-right">Actions</TableHead>
+                    <TableCell colSpan={4}>
+                      <div className="flex justify-center py-8">
+                        <Spinner className="size-5" />
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {remotes.isLoading ? (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={4} className="px-6 py-14 text-center">
-                        <Spinner className="size-6" />
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    list.map((r) => (
-                      <RemoteRow
-                        key={r.name}
-                        remote={r}
-                        typeLabel={providerLabel(r.type)}
-                        onBrowse={() => openInExplorer({ fs: `${r.name}:`, path: "" })}
-                        onEdit={() => setWizard({ mode: "edit", remote: r })}
-                        onDelete={() => setDeleting(r)}
-                        onQuota={() => setAbout(r)}
-                      />
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                ) : (
+                  list.map((r) => (
+                    <RemoteRow
+                      key={r.name}
+                      remote={r}
+                      typeLabel={providerLabel(r.type)}
+                      onBrowse={() => openInExplorer({ fs: `${r.name}:`, path: "" })}
+                      onEdit={() => setWizard({ mode: "edit", remote: r })}
+                      onDelete={() => setDeleting(r)}
+                      onQuota={() => setAbout(r)}
+                    />
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </Card>
         )}
       </PageBody>
@@ -191,17 +192,22 @@ function RemoteRow({
 }) {
   return (
     <TableRow>
-      <TableCell className="px-6 py-4">
-        <button type="button" className="no-ring block max-w-full truncate text-left text-base font-semibold hover:text-primary" onClick={onBrowse}>
-          {remote.name}
-        </button>
-        <div className="truncate text-xs text-muted-foreground">{typeLabel}</div>
+      <TableCell>
+        <div className="flex items-center gap-3">
+          <Seal type={remote.type} />
+          <div className="min-w-0">
+            <button type="button" className="no-ring block max-w-full truncate rounded-sm text-left font-medium transition-colors hover:text-primary-ink focus-visible:ring-3 focus-visible:ring-ring/50" onClick={onBrowse}>
+              {remote.name}
+            </button>
+            <div className="truncate text-xs text-muted-foreground">{typeLabel}</div>
+          </div>
+        </div>
       </TableCell>
-      <TableCell className="px-4 py-4 font-mono text-muted-foreground">{remote.type}</TableCell>
-      <TableCell className="px-4 py-4">
+      <TableCell className="font-mono text-xs leading-5 text-muted-foreground">{remote.type}</TableCell>
+      <TableCell>
         <UsageCell name={remote.name} />
       </TableCell>
-      <TableCell className="px-4 py-4 text-right">
+      <TableCell className="text-right">
         <div className="flex items-center justify-end gap-1">
           <IconButton size="sm" label={`Browse ${remote.name}:`} onClick={onBrowse}>
             <FolderOpen />
@@ -233,21 +239,22 @@ function UsageCell({ name }: { name: string }) {
   const fs = `${name}:`;
   const about: AboutInfo | undefined = useQuery({ queryKey: ["about", fs], queryFn: () => rc.about(fs), enabled: false }).data;
 
-  if (!about) return <span className="text-muted-foreground">—</span>;
+  if (!about) return <span className="text-faint-foreground">–</span>;
   const used = about.used ?? 0;
   const total = about.total ?? 0;
   if (total <= 0) return <span className="tnum text-muted-foreground">{formatBytes(used)} used</span>;
 
   const share = Math.round(percent(used, total));
   return (
-    <div className="w-60">
+    <div className="w-60 text-xs">
       <div className="flex items-center justify-between gap-4">
         <span className="tnum text-muted-foreground">
-          {formatBytes(used)} / {formatBytes(total)}
+          {formatBytes(used)} of {formatBytes(total)}
         </span>
         <span className="tnum text-muted-foreground">{share}%</span>
       </div>
-      <ProgressBar className="mt-2" size="sm" value={share} tone={share >= 85 ? "danger" : "accent"} />
+      {/* Storage in use is a level, not a transfer: one neutral bar, red once the remote is nearly full. */}
+      <ProgressBar className="mt-2" size="sm" value={share} tone={share >= 85 ? "danger" : "neutral"} />
     </div>
   );
 }
@@ -270,7 +277,7 @@ function AboutDialog({ remote, onClose }: { remote: RemoteInfo; onClose: () => v
         <div className="flex flex-col gap-3">
           {total > 0 && (
             <div>
-              <ProgressBar value={percent(used, total)} />
+              <ProgressBar value={percent(used, total)} tone={percent(used, total) >= 85 ? "danger" : "neutral"} />
               <div className="tnum mt-1 text-xs text-muted-foreground">
                 {formatBytes(used)} of {formatBytes(total)} used
               </div>
@@ -288,7 +295,7 @@ function AboutDialog({ remote, onClose }: { remote: RemoteInfo; onClose: () => v
       )}
       {fsinfo.data && (
         <div className="mt-4">
-          <div className="mb-1.5 text-xs font-medium uppercase tracking-widest text-muted-foreground">Backend {fsinfo.data.Name}</div>
+          <GroupLabel className="mb-2">Backend {fsinfo.data.Name}</GroupLabel>
           <div className="mb-2 text-xs text-muted-foreground">Hashes: {fsinfo.data.Hashes?.join(", ") || "none"}</div>
           <div className="flex flex-wrap gap-1">
             {Object.entries(fsinfo.data.Features ?? {})

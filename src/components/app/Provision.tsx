@@ -67,7 +67,7 @@ export function ProvisionProgress({ events, running }: { events: ProvisionEvent[
             <li key={phase.id} className="flex items-start gap-2.5 text-sm">
               <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center">
                 {state === "done" && <CircleCheck className="size-4 text-success" />}
-                {state === "active" && <Loader2 className="size-4 animate-spin text-primary" />}
+                {state === "active" && <Loader2 className="size-4 animate-spin text-primary-ink" />}
                 {state === "failed" && <CircleX className="size-4 text-destructive" />}
                 {state === "pending" && <StatusDot />}
               </span>

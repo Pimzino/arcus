@@ -134,7 +134,7 @@ for (const speed of speeds)
     await frame();
     layouts.add(layout());
     const cells = $$("tbody tr")[0].children;
-    shown.add(cells[3].textContent + " / " + cells[4].textContent);
+    shown.add([...cells[2].children].map((line) => line.textContent).join(" / "));
     for (const e of $$("tbody tr td .truncate")) if (e.closest("td").cellIndex !== 1 && e.scrollWidth > e.clientWidth + 0.5) clipped.add(e.textContent);
   }
 setRunning({ stats: { speed: 12.34 * 1024 ** 2, eta: 3599 } });

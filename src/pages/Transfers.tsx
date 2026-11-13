@@ -1,12 +1,14 @@
-import { ArrowLeftRight, FileText, FolderOpen, FolderSync, Info, MoreHorizontal, Pencil, Plus, RotateCcw, Square, Trash2 } from "lucide-react";
+import { ArrowLeftRight, CircleStop, FileText, FolderOpen, FolderSync, Info, MoreHorizontal, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Arch } from "../components/app/Arch";
 import { useFileManager } from "../components/app/FileManager";
 import { activityFacts, PhaseLine } from "../components/app/JobActivity";
 import { JobDetailsDialog } from "../components/app/JobDetails";
 import { LogViewerDialog } from "../components/app/LogViewer";
+import { jobProgress, Span } from "../components/app/Span";
+import { Throughput } from "../components/app/Throughput";
 import { buildJobRequest, formFromJob, MODES, TransferDialog, type Mode, type TransferForm } from "../components/app/TransferDialog";
 import {
-  Badge,
   Button,
   Card,
   EmptyState,
@@ -14,8 +16,7 @@ import {
   Menu,
   PageBody,
   PageHeader,
-  ProgressBar,
-  Stat,
+  StatusBadge,
   Table,
   TableBody,
   TableCell,
@@ -30,12 +31,13 @@ import {
 } from "../components/ui";
 import { isStopError, onlyStopError } from "../lib/activity";
 import { localPathOf } from "../lib/fileManager";
-import { formatBytes, formatDateTime, formatDuration, formatEta, formatSpeed, percent, pluralize } from "../lib/format";
+import { formatBytes, formatDateTime, formatDuration, formatEta, formatSpeed, pluralize } from "../lib/format";
 import { fsString } from "../lib/paths";
 import { jobLog, rerunLogChoice } from "../lib/transferLog";
 import { errorMessage } from "../lib/types";
 import { useAppStore, useDaemonRunning } from "../store/app";
-import { sessionTotals, useJobsStore, type TrackedJob } from "../store/jobs";
+import { sessionTotals, transferSummary, useJobsStore, type TrackedJob } from "../store/jobs";
+import { useThroughput } from "../store/throughput";
 
 type Filter = "all" | "running" | "done" | "failed";
 
@@ -82,7 +84,7 @@ export function TransfersPage() {
     <>
       <PageHeader
         title="Transfers"
-        description="Copy, sync, move, bisync and check jobs run by rclone."
+        description="Copy, sync, move, bisync and check jobs run by rclone"
         actions={
           <>
             <Button size="lg" onClick={clearFinished} disabled={counts.all === counts.running}>
@@ -107,10 +109,10 @@ export function TransfersPage() {
       </PageHeader>
       <PageBody>
         <div className="space-y-6">
-          <GlobalStats jobs={jobs} />
+          {jobs.length > 0 && <TransferHero jobs={jobs} />}
           {visible.length === 0 ? (
             <EmptyState
-              icon={<ArrowLeftRight />}
+              {...(jobs.length === 0 ? { art: <Arch className="w-24" /> } : { icon: <ArrowLeftRight /> })}
               title={jobs.length === 0 ? "No transfers yet" : "Nothing here"}
               description={jobs.length === 0 ? "Start one here, or select files in the explorer and copy them to the other pane." : "No jobs match this filter."}
               action={
@@ -122,19 +124,16 @@ export function TransfersPage() {
               }
             />
           ) : (
-            /* The table runs to the card's edges: the card body's own padding is cancelled here. */
-            <Card bodyClassName="-mx-4 -my-4">
+            <Card padded={false} className="overflow-hidden">
               {/* Fixed layout: columns keep the widths set here (each fits its longest value, e.g. 1023 MiB/s),
                   so speed and ETA ticking over never resize them and the row never shifts sideways. */}
-              <Table className="table-fixed">
+              <Table className="table-fixed [&_td]:align-top">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[112px] px-4 text-xs">Status</TableHead>
-                    <TableHead className="px-4 text-xs">Job</TableHead>
-                    <TableHead className="w-[182px] px-4 text-xs">Progress</TableHead>
-                    <TableHead className="w-[112px] px-4 text-xs">Speed</TableHead>
-                    <TableHead className="w-[96px] px-4 text-xs">ETA</TableHead>
-                    <TableHead className="w-[100px] px-4 text-xs text-right">Actions</TableHead>
+                    <TableHead className="w-28">Status</TableHead>
+                    <TableHead>Job</TableHead>
+                    <TableHead className="w-48 text-right">Progress</TableHead>
+                    <TableHead className="w-[100px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -152,16 +151,57 @@ export function TransfersPage() {
   );
 }
 
-/** Totals of the jobs started since the app opened. Each runs in its own rclone, so they are summed here. */
-function GlobalStats({ jobs }: { jobs: TrackedJob[] }) {
-  const t = useMemo(() => sessionTotals(jobs), [jobs]);
+/** The folder or file a path ends in: what a pier of the arch is named after. */
+const leaf = (path: string) => path.split("/").filter(Boolean).pop() ?? path;
+
+/**
+ * What is moving right now: the arch, built as far as the running transfers have got, with its piers named after
+ * the two places when one transfer runs; their combined speed, and how that speed has gone. Under the speed, in
+ * a sentence, what the jobs started since the app opened have done (each runs in its own rclone, so they are
+ * summed here).
+ */
+function TransferHero({ jobs }: { jobs: TrackedJob[] }) {
+  const now = useMemo(() => transferSummary(jobs), [jobs]);
+  const session = useMemo(() => sessionTotals(jobs), [jobs]);
+  const samples = useThroughput();
+  const [figure, unit] = formatSpeed(now.speed).split(" ");
+  const running = jobs.filter((j) => j.status === "running");
   return (
-    <div className="grid grid-cols-4 gap-4">
-      <Stat label="Speed" value={formatSpeed(t.speed)} hint={t.running ? `${t.running} running` : "nothing running"} />
-      <Stat label="Transferred" value={formatBytes(t.bytes)} hint={`${t.transfers} files this session`} />
-      <Stat label="Checks" value={String(t.checks)} />
-      <Stat label="Errors" value={String(t.errors)} tone={t.errors ? "danger" : undefined} hint={t.lastError ? t.lastError.slice(0, 40) : undefined} />
-    </div>
+    <section aria-label="Transfers right now" className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-8 rounded-xl bg-card px-6 py-5 text-card-foreground shadow-card ring-1 ring-border">
+      <figure className="w-40">
+        <Arch
+          label={now.running ? "Progress of the running transfers" : undefined}
+          value={now.running ? (now.percent ?? 0) : undefined}
+          indeterminate={now.running > 0 && now.percent === null}
+        />
+        {running.length === 1 && (
+          <figcaption className="mt-2 grid grid-cols-2 gap-4 font-mono text-xs text-muted-foreground" title={`${running[0].source} → ${running[0].destination}`}>
+            <span className="truncate">{leaf(running[0].source)}</span>
+            <span className="truncate text-right">{leaf(running[0].destination)}</span>
+          </figcaption>
+        )}
+      </figure>
+      {/* As wide as its longest line, so the chart beside it never moves as the figures change. */}
+      <div className="w-60">
+        <div className="text-sm text-muted-foreground">{now.running ? `${pluralize(now.running, "transfer")} running` : "Nothing running"}</div>
+        <div className={cn("tnum mt-1 text-4xl leading-10 font-medium tracking-tight", !now.running && "text-muted-foreground")}>
+          {figure}
+          <span className="ml-1.5 text-lg font-normal tracking-normal text-muted-foreground">{unit}</span>
+        </div>
+        {now.percent !== null && (
+          <div className="tnum mt-1 truncate text-sm">
+            {Math.round(now.percent)}% of {formatBytes(now.totalBytes)}
+            {now.eta !== null && <span className="text-muted-foreground">, {formatEta(now.eta)} left</span>}
+          </div>
+        )}
+        <div className="tnum mt-3 truncate text-xs text-muted-foreground" title={session.lastError ?? undefined}>
+          Since Arcus opened: {formatBytes(session.bytes)} in {pluralize(session.transfers, "file")}
+          {session.checks > 0 && `, ${session.checks} checked`}
+          {session.errors > 0 && <span className="text-destructive">, {pluralize(session.errors, "error")}</span>}
+        </div>
+      </div>
+      <Throughput samples={samples} className="h-32" />
+    </section>
   );
 }
 
@@ -261,9 +301,9 @@ function JobRow({ job }: { job: TrackedJob }) {
 
   const s = job.stats;
   const status = STATUS[job.status];
-  const pct = s?.totalBytes ? percent(s.bytes, s.totalBytes) : job.status === "success" ? 100 : 0;
-  const tone: Tone = job.status === "error" ? "danger" : job.status === "success" ? "success" : job.status === "stopped" ? "warning" : "accent";
   const transferred = s ? (s.totalBytes ? `${formatBytes(s.bytes)} of ${formatBytes(s.totalBytes)}` : formatBytes(s.bytes)) : isRunning ? "Starting…" : "–";
+  // Beside the amount: how fast and how long still while it runs, and how fast it went once it has ended.
+  const pace = !s ? null : isRunning ? [formatSpeed(s.speed), s.eta != null ? `${formatEta(s.eta)} left` : null] : s.elapsedTime ? [`${formatSpeed(s.bytes / s.elapsedTime)} on average`, null] : null;
   const facts = jobFacts(job);
   const errorCount = s && s.errors > 0 && !onlyStopError(job) ? pluralize(s.errors, "error") : null;
   const errorText = s?.lastError ?? (job.status !== "running" ? job.error : null);
@@ -273,15 +313,15 @@ function JobRow({ job }: { job: TrackedJob }) {
   return (
     <>
       <TableRow>
-        <TableCell className="px-4 py-3 align-top">
-          <Badge tone={status.tone}>
-            {isRunning && <span className="size-2 shrink-0 animate-pulse rounded-full bg-current" aria-hidden />}
+        <TableCell>
+          {/* As tall as the job's title beside it, so the dot and the title share a line. */}
+          <StatusBadge tone={status.tone} pulse={isRunning} className="h-5">
             {status.label}
-          </Badge>
+          </StatusBadge>
         </TableCell>
 
-        <TableCell className="px-4 py-3 align-top">
-          <div className="truncate font-semibold" title={job.title}>
+        <TableCell>
+          <div className="truncate font-medium" title={job.title}>
             {job.title}
           </div>
           {job.watchId && (
@@ -290,10 +330,7 @@ function JobRow({ job }: { job: TrackedJob }) {
               <span className="truncate">Watch folder: {job.watchName}</span>
             </div>
           )}
-          <div className="truncate font-mono text-xs text-muted-foreground" title={job.destination ? `${job.source} → ${job.destination}` : job.source}>
-            {job.source}
-            {job.destination ? ` → ${job.destination}` : ""}
-          </div>
+          <Span className="mt-1.5 mb-1" source={job.source} destination={job.destination} {...jobProgress(job)} />
           {isRunning ? (
             <PhaseLine job={job} className="mt-0.5" />
           ) : (
@@ -309,23 +346,20 @@ function JobRow({ job }: { job: TrackedJob }) {
           )}
         </TableCell>
 
-        <TableCell className="px-4 py-3 align-top">
-          <div className="w-[150px]">
-            <ProgressBar size="sm" value={pct} indeterminate={isRunning && !s?.totalBytes} tone={tone} />
-            <div className="tnum mt-1.5 truncate text-xs text-muted-foreground" title={transferred}>{transferred}</div>
+        {/* The amount on the title's line, how fast under it: the lines of the job beside them say the rest. */}
+        <TableCell className="tnum text-right">
+          <div className="truncate" title={transferred}>
+            {transferred}
           </div>
+          {pace && (
+            <div className="mt-1.5 truncate text-xs text-muted-foreground" title={pace.filter(Boolean).join(", ")}>
+              {pace[0]}
+            </div>
+          )}
+          {pace?.[1] && <div className="mt-1 truncate text-xs text-muted-foreground">{pace[1]}</div>}
         </TableCell>
 
-        <TableCell className="tnum px-4 py-3 align-top text-muted-foreground">
-          <span className="block truncate" title={isRunning && s ? formatSpeed(s.speed) : undefined}>
-            {isRunning && s ? formatSpeed(s.speed) : "–"}
-          </span>
-        </TableCell>
-        <TableCell className="tnum px-4 py-3 align-top text-muted-foreground">
-          <span className="block truncate">{isRunning && s ? formatEta(s.eta) : "–"}</span>
-        </TableCell>
-
-        <TableCell className="px-4 py-3 align-top">
+        <TableCell>
           <div className="flex items-center justify-end gap-1">
             {isRunning ? (
               <IconButton
@@ -334,7 +368,7 @@ function JobRow({ job }: { job: TrackedJob }) {
                 onClick={act("Could not stop the job", () => stop(job.id))}
                 disabled={job.stopRequested}
               >
-                <Square />
+                <CircleStop />
               </IconButton>
             ) : (
               <IconButton label="Details" size="sm" onClick={() => setDetails(true)}>
@@ -351,7 +385,7 @@ function JobRow({ job }: { job: TrackedJob }) {
       </TableRow>
 
       {details && <JobDetailsDialog job={job} onClose={() => setDetails(false)} />}
-      {showLog && job.logPath && <LogViewerDialog open onClose={() => setShowLog(false)} title={`${job.title} — log`} path={job.logPath} live={isRunning} />}
+      {showLog && job.logPath && <LogViewerDialog open onClose={() => setShowLog(false)} title={`Log of ${job.title}`} path={job.logPath} live={isRunning} />}
       {editing && <TransferDialog open initialForm={editing} heading={`Run again · based on “${job.title}”`} onClose={() => setEditing(null)} />}
     </>
   );

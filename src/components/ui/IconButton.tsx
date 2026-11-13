@@ -18,7 +18,7 @@ export type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "chi
   shortcut?: string;
   tooltipSide?: TooltipSide;
   size?: IconButtonSize;
-  variant?: Extract<ButtonVariant, "ghost" | "outline" | "secondary">;
+  variant?: Extract<ButtonVariant, "default" | "ghost" | "outline" | "secondary">;
   active?: boolean;
   children: ReactNode;
 };
@@ -44,7 +44,9 @@ export function IconButton({
         className={cn(
           buttonBase,
           /* `cn` concatenates, so the pressed look replaces the variant instead of layering on it. */
-          active ? "border-transparent bg-muted text-foreground" : buttonVariants[variant],
+          active ? "border-transparent bg-accent text-foreground" : buttonVariants[variant],
+          /* A bare icon is chrome: it takes the muted text role until it is pointed at. */
+          variant === "ghost" && !active && "text-muted-foreground hover:text-foreground",
           buttonSizes[iconSizes[size]],
           className,
         )}

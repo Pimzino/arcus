@@ -28,12 +28,22 @@
   --font-display: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
+  /* One curve for everything that moves: 120ms for feedback, 160ms for what enters. */
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --default-transition-timing-function: var(--ease-out-quart);
+  --default-transition-duration: 120ms;
 
   --animate-fade-in: fade-in 120ms var(--ease-out-quart);
-  --animate-scale-in: scale-in 140ms var(--ease-out-quart);
+  --animate-scale-in: scale-in 160ms var(--ease-out-quart);
   --animate-slide-up: slide-up 160ms var(--ease-out-quart);
   --animate-indeterminate: indeterminate 1.4s ease-in-out infinite;
+  /* The arch (Arch.tsx): a stone is set when the arch first appears, and the stones light in turn, left to
+     right, while a transfer has no total to measure against. */
+  --animate-stone-set: stone-set 320ms var(--ease-out-quart) backwards;
+  --animate-keystone-set: keystone-set 460ms var(--ease-out-quart) backwards;
+  --animate-stone-wave: stone-wave 1.8s ease-in-out infinite;
+  /* One entrance: a page rises into place when it is opened. */
+  --animate-page-in: page-in 240ms var(--ease-out-quart) backwards;
 
   @keyframes fade-in {
     from { opacity: 0; }
@@ -51,11 +61,36 @@
     0% { transform: translateX(-100%); }
     100% { transform: translateX(250%); }
   }
+  @keyframes stone-set {
+    from { opacity: 0; transform: translateY(-3px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes keystone-set {
+    from { opacity: 0; transform: translateY(-8px); }
+    60% { opacity: 1; }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes page-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes stone-wave {
+    0%, 60%, 100% { opacity: 0; }
+    20% { opacity: 1; }
+  }
 }
 
-/* Semantic colour tokens, the same set rclone's own web GUI uses. Utilities such as bg-card /
-   text-muted-foreground / border-border compile to these variables, so every component picks up
-   both themes for free. --radius is 0: controls are square, cards and dialogs get 4px. */
+/* Semantic colour tokens. Utilities such as bg-card / text-muted-foreground / border-border compile to these
+   variables, so every component picks up both themes for free.
+
+   The design in one paragraph: the app wears the brand (branding/build.py). Dark is the brand's midnight, light
+   is its paper with midnight for ink, and one ramp on the brand's hue carries every surface, border and text;
+   depth is a step along it plus a hairline and a lit top edge. Text has three roles: foreground,
+   muted-foreground and faint-foreground (placeholders, column heads' arrows, dashes). The brand blue is the one
+   accent, kept for the primary action, the selection and the focus ring: `primary` is the fill, `primary-ink` the
+   same blue where it is text or an icon on a surface. Status colours only ever say a status. The one place
+   colour runs rich is a transfer's progress: the logo's arch, built stone by stone (Arch.tsx), and the same five
+   stones laid flat where there is only room for a bar (.span below). */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -65,6 +100,9 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-ink: var(--primary-ink);
+  --color-faint-foreground: var(--faint-foreground);
+  --color-raised: var(--raised);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -77,119 +115,180 @@
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
   --color-success: var(--success);
   --color-warning: var(--warning);
-  --color-info: var(--info);
-  --color-folder: var(--folder);
+  /* The terminal is dark in both themes, so what is written in it has colours of its own. */
   --color-terminal: var(--terminal);
   --color-terminal-fg: var(--terminal-fg);
+  --color-terminal-command: var(--stone-5);
+  --color-terminal-error: oklch(0.74 0.15 22);
+  /* The brand's midnight in both themes: the text on the arch's two pale blues. */
+  --color-midnight: oklch(0.17 0.045 266);
+  /* The amber of a dot that asks for attention; `warning` is the same hue dark enough to read as text. */
+  --color-signal: oklch(0.78 0.15 78);
 
-  --radius-sm: max(0px, calc(var(--radius) - 4px));
-  --radius-md: max(0px, calc(var(--radius) - 2px));
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  /* Controls 6, cards 10, dialogs 12. What sits inside a padded box takes the box's radius less the padding,
+     never under 4: a menu's items, a segmented control's buttons. */
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+
+  /* What lifts a card off the page and a filled button off a card (per theme, below). */
+  --shadow-card: var(--card-shadow);
+  --shadow-button: var(--button-shadow);
+  --shadow-dialog: var(--dialog-shadow);
 }
 
 :root {
   color-scheme: light;
   /* Height of the bottom status bar; overlays keep clear of it. */
   --statusbar-height: 24px;
-  --radius: 0;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* The brand's paper, and its midnight for ink. */
+  --background: oklch(0.985 0.003 266);
+  --foreground: oklch(0.17 0.045 266);
+  --muted-foreground: oklch(0.45 0.035 266);
+  --faint-foreground: oklch(0.62 0.025 266);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: var(--foreground);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --popover-foreground: var(--foreground);
+  /* The surface of the chosen one of a set, on a muted track: the active tab, the switch's thumb. */
+  --raised: oklch(1 0 0);
+  --secondary: oklch(0.95 0.008 266);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.955 0.007 266);
+  --accent: oklch(0.935 0.012 266);
+  --accent-foreground: var(--foreground);
+  --border: oklch(0.17 0.045 266 / 10%);
+  --input: oklch(0.17 0.045 266 / 18%);
+  --sidebar: oklch(0.965 0.008 266);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-accent: oklch(0.17 0.045 266 / 7%);
+  --sidebar-border: var(--border);
+  --card-shadow: 0 1px 2px oklch(0.17 0.045 266 / 6%);
+  --button-shadow: inset 0 1px 0 oklch(1 0 0 / 18%), 0 1px 2px oklch(0.17 0.045 266 / 24%);
+  --dialog-shadow: 0 24px 64px -16px oklch(0.17 0.045 266 / 35%), 0 2px 6px oklch(0.17 0.045 266 / 10%);
+  --scrim: oklch(0.17 0.045 266 / 40%);
+  /* The brand's second stone, #1548e7: 6.9:1 under white text, and against the light surfaces as text. */
   --primary: oklch(0.488 0.243 264.376);
-  --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.58 0.22 27);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.546 0.245 262.881);
-  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
-  /* App-only: rclone-web has no status colours beyond destructive, job states need them. */
-  --success: oklch(0.596 0.145 163.225);
-  --warning: oklch(0.666 0.179 58.318);
-  --info: oklch(0.488 0.243 264.376);
-  --folder: oklch(0.511 0.262 276.966);
-  --terminal: oklch(0.145 0 0);
-  --terminal-fg: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.985 0.01 255);
+  --primary-ink: oklch(0.488 0.243 264.376);
+  --ring: oklch(0.66 0.17 255);
+  /* Status colours, toned to sit inside the palette; each reaches 4.5:1 as text on its theme's surfaces. */
+  --destructive: oklch(0.53 0.19 27);
+  --success: oklch(0.5 0.11 160);
+  --warning: oklch(0.54 0.12 65);
+  --terminal: oklch(0.17 0.045 266);
+  --terminal-fg: oklch(0.965 0.008 266);
+  /* The arch's five stones, left to right (branding/build.py): four blues stepping from deep to light, and the
+     keystone in the middle in the text colour, midnight on paper and white on midnight. */
+  --stone-1: #122caa;
+  --stone-2: #1548e7;
+  /* The keystone on paper: the brand's midnight a step up from the ink, so it reads as a stone and not as a gap. */
+  --stone-3: oklch(0.29 0.07 266);
+  --stone-4: #3c8cff;
+  --stone-5: #85c4ff;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.42 0.18 266);
-  --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.371 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.623 0.214 259.815);
-  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-  --success: oklch(0.792 0.209 151.711);
-  --warning: oklch(0.828 0.189 84.429);
-  --info: oklch(0.42 0.18 266);
-  --folder: oklch(0.673 0.182 276.935);
-  --terminal: oklch(0.1 0 0);
-  --terminal-fg: oklch(0.985 0 0);
+  /* The brand's midnight: the page is its deep end, and each surface above it a step toward its light end. */
+  --background: oklch(0.17 0.035 266);
+  --foreground: oklch(0.965 0.008 266);
+  --muted-foreground: oklch(0.76 0.035 266);
+  --faint-foreground: oklch(0.6 0.04 266);
+  --card: oklch(0.205 0.04 266);
+  --popover: oklch(0.23 0.045 266);
+  --raised: oklch(0.33 0.06 266);
+  --secondary: oklch(0.255 0.045 266);
+  --muted: oklch(0.24 0.04 266);
+  --accent: oklch(0.28 0.05 266);
+  --border: oklch(0.8 0.08 266 / 14%);
+  --input: oklch(0.8 0.08 266 / 24%);
+  --sidebar: oklch(0.145 0.035 266);
+  --sidebar-accent: oklch(0.8 0.08 266 / 13%);
+  --card-shadow: inset 0 1px 0 oklch(1 0 0 / 4%);
+  --button-shadow: inset 0 1px 0 oklch(1 0 0 / 16%), 0 1px 2px oklch(0 0 0 / 40%);
+  --dialog-shadow: inset 0 1px 0 oklch(1 0 0 / 6%), 0 24px 64px -16px oklch(0 0 0 / 70%);
+  --scrim: oklch(0.08 0.03 266 / 72%);
+  /* A step up from #1548e7, so the fill stands off the dark surfaces: 5.2:1 under its text. As text the blue
+     has to be far lighter to be read, between the fourth and fifth stones. */
+  --primary: oklch(0.53 0.215 264);
+  --primary-ink: oklch(0.76 0.12 250);
+  --destructive: oklch(0.71 0.16 22);
+  --success: oklch(0.76 0.13 158);
+  --warning: oklch(0.8 0.12 82);
+  --terminal: oklch(0.13 0.03 266);
+  --stone-1: #1c3bc4;
+  --stone-3: var(--foreground);
 }
 
-/* Bare `border` / `divide` utilities use the token, as rclone-web does. */
+/* Bare `border` / `divide` utilities draw the hairline. */
 @layer base {
   * {
     border-color: var(--border);
   }
+  /* One stroke for every icon (lucide draws at 2, heavy beside 14px text). */
+  svg.lucide {
+    stroke-width: 1.75;
+  }
+}
+
+/* The span: a transfer's progress as the arch's five stones laid flat (ProgressBar). The mask cuts the track
+   into five stones with a 2px joint between them; its tile is a fifth of the track plus a fifth of a joint, so
+   the fifth joint falls outside. The fill is the whole span, clipped to the progress made, so each stone keeps
+   its place and colour however far the transfer has got. */
+.span {
+  --joint: 2px;
+  background: color-mix(in oklab, var(--foreground) 16%, transparent);
+  mask: linear-gradient(90deg, #000 calc(100% - var(--joint)), transparent 0) 0 0 / calc((100% + var(--joint)) / 5) 100% repeat-x;
+}
+/* Stones laid by work that then stopped short: what was built stays, without its colour. */
+.span-drained {
+  background-color: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+}
+.span-stones {
+  background: linear-gradient(
+    90deg,
+    var(--stone-1) 0 20%,
+    var(--stone-2) 0 40%,
+    var(--stone-3) 0 60%,
+    var(--stone-4) 0 80%,
+    var(--stone-5) 0
+  );
+}
+
+/* In a dialog a card is a section of the dialog, not a box inside a box: its frame goes, a hairline stands over
+   it, and its content runs to the dialog's own margins. A heading that opens and closes its section keeps a
+   little room around it for the pointer's highlight. */
+[role="dialog"] [data-card] {
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  padding: 12px 0 0;
+}
+[role="dialog"] [data-card]:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+[role="dialog"] [data-card] > * {
+  border-bottom: 0;
+  padding-inline: 0;
+}
+[role="dialog"] [data-card] > button {
+  margin: -8px -12px;
+  border-radius: var(--radius-lg);
+  padding: 8px 12px;
+}
+
+/* Sora sets its word space tight and the titles' own tightening closes it: give the words their room back. */
+.font-display {
+  word-spacing: 0.14em;
 }
 
 html,

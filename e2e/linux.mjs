@@ -355,7 +355,7 @@ try {
   step = "3 copy";
   const row = await waitFor(`"${FILE}" in pane 1`, () => find(`section[aria-label="Pane 1"] [role="row"][data-name="${FILE}"]`));
   await click(row);
-  await click(await find(`section[aria-label="Pane 1"] button[aria-label^="Copy to other pane"]`));
+  await click(await find(`[aria-label="Between the panes"] button[aria-label^="Copy to other pane"]`));
   log("copy started");
   await waitFor("the copy to arrive on disk", () => existsSync(join(dst, FILE)) && readFileSync(join(dst, FILE), "utf8") === CONTENT, {
     timeout: 60_000,

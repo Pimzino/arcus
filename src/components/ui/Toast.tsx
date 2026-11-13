@@ -42,7 +42,7 @@ export function toast(options: ToastOptions) {
 
 const icons: Record<ToastTone, ReactNode> = {
   neutral: <Info className="size-4 text-muted-foreground" />,
-  info: <Info className="size-4 text-primary" />,
+  info: <Info className="size-4 text-primary-ink" />,
   success: <CircleCheck className="size-4 text-success" />,
   warning: <TriangleAlert className="size-4 text-warning" />,
   danger: <CircleX className="size-4 text-destructive" />,
@@ -71,7 +71,7 @@ function ToastItem({ entry }: { entry: ToastEntry }) {
     <div
       role="status"
       className={cn(
-        "pointer-events-auto flex w-[356px] items-start gap-3 rounded-lg border bg-popover p-4 text-sm text-popover-foreground shadow-lg animate-slide-up",
+        "pointer-events-auto flex w-88 items-start gap-3 rounded-xl border bg-popover p-4 text-sm text-popover-foreground shadow-lg animate-slide-up",
       )}
       onMouseEnter={disarm}
       onMouseLeave={arm}
@@ -97,7 +97,7 @@ function ToastItem({ entry }: { entry: ToastEntry }) {
       <button
         type="button"
         aria-label="Dismiss"
-        className="no-ring -mr-1.5 -mt-1.5 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="no-ring -mt-1 -mr-1 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         onClick={() => remove(entry.id)}
       >
         <X className="size-3.5" />

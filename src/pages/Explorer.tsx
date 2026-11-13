@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  ArrowLeftFromLine,
   ArrowLeftRight,
   ArrowRight,
+  ArrowRightFromLine,
   ChevronDown,
   ChevronUp,
   Copy,
@@ -20,7 +22,8 @@ import {
 } from "lucide-react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
 import { flushSync } from "react-dom";
-import { LocationBar, useLocationMenuItems } from "../components/app/Location";
+import { LocationBar } from "../components/app/Location";
+import { Places } from "../components/app/Places";
 import { FileIcon } from "../components/app/FileIcon";
 import { useFileManager } from "../components/app/FileManager";
 import { blankForm, TransferDialog, type TransferForm } from "../components/app/TransferDialog";
@@ -31,6 +34,7 @@ import {
   Dialog,
   EmptyState,
   ErrorMessage,
+  GroupLabel,
   IconButton,
   Kbd,
   KeyValue,
@@ -57,7 +61,7 @@ import { errorMessage, type ListItem } from "../lib/types";
 import { scrollTopToReveal, visibleRange, type ListViewport } from "../lib/virtualList";
 import { useAppStore, useDaemonRunning } from "../store/app";
 import { useExplorerStore } from "../store/explorer";
-import { onJobFinished, useJobsStore, type StartJobInput } from "../store/jobs";
+import { onJobFinished, transferSummary, useJobsStore, type StartJobInput } from "../store/jobs";
 
 type SortKey = "name" | "size" | "modTime";
 /** An item to copy or move; `id` is set for a Google Drive file that has to be found by ID, as others next to it share its name. */
@@ -71,8 +75,10 @@ const overDropName = (e: DragEvent) => e.target instanceof Element && !!e.target
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
-/** Height of a listing row in px; FileRow's h-9 has to match. */
-const ROW_HEIGHT = 36;
+/** Height of a listing row in px; FileRow's h-8 has to match. */
+const ROW_HEIGHT = 32;
+/** Name, size and modified: the columns of the listing's header and of every row. */
+const LISTING_COLUMNS = "grid-cols-[minmax(0,1fr)_92px_168px]";
 /**
  * Rows rendered past each edge of the visible ones. A trackpad fling passes 30,000 px/s, and WebKit paints its
  * tiles ahead of the view: rows that are not there yet get painted as blank and again once they arrive.
@@ -130,15 +136,68 @@ export function ExplorerPage() {
   return (
     <div ref={containerRef} className="flex h-full min-h-0">
       <Pane index={0} style={{ width: `${split * 100}%` }} />
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        className="relative w-[5px] shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary/50"
-        onMouseDown={onDividerDown}
-        onDoubleClick={() => setSplit(0.5)}
-        title="Drag to resize · double-click to reset"
-      />
+      <Crossing onMouseDown={onDividerDown} onDoubleClick={() => setSplit(0.5)} />
       <Pane index={1} className="flex-1" />
+    </div>
+  );
+}
+
+/**
+ * What stands between the two panes: the span. At its head, the two ways to send the active pane's selection
+ * across, their arrows pointing the way it will go. Below, a seam of five stones from the foot of the window to
+ * the buttons, which is built from the ground up while a transfer runs between the two places open. The whole
+ * strip is also the handle that sets how the width is shared.
+ */
+function Crossing({ onMouseDown, onDoubleClick }: { onMouseDown: (e: MouseEvent) => void; onDoubleClick: () => void }) {
+  const active = useExplorerStore((s) => s.active);
+  const panes = useExplorerStore((s) => s.panes);
+  const count = useExplorerStore((s) => s.selected[s.active]);
+  const cross = useExplorerStore((s) => s.cross);
+  const jobs = useJobsStore((s) => s.jobs);
+  const to = panes[1 - active];
+  const [a, b] = panes.map(formatLocation);
+  const between = useMemo(
+    () => transferSummary(a && b ? jobs.filter((j) => (j.source.startsWith(a) && j.destination.startsWith(b)) || (j.source.startsWith(b) && j.destination.startsWith(a))) : []),
+    [jobs, a, b],
+  );
+  const built = (between.percent ?? 0) / 20;
+  const Arrow = active === 0 ? ArrowRight : ArrowLeft;
+  const MoveArrow = active === 0 ? ArrowRightFromLine : ArrowLeftFromLine;
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Between the panes"
+      className="flex w-10 shrink-0 cursor-col-resize flex-col items-center gap-1 border-x border-border bg-sidebar pt-2 pb-3"
+      onMouseDown={onMouseDown}
+      onDoubleClick={onDoubleClick}
+      title="Drag to resize, double-click to reset"
+    >
+      {/* The buttons are not part of the handle: pressing one must neither start a drag nor move the keys. */}
+      <div className="flex cursor-default flex-col gap-1" onMouseDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+        <IconButton label={`Copy to other pane${to.fs ? ` (${formatLocation(to)})` : ""}`} shortcut="F5" size="sm" variant={count > 0 && to.fs ? "default" : "ghost"} disabled={!count || !to.fs} onClick={() => cross("copy")}>
+          <Arrow />
+        </IconButton>
+        <IconButton label="Move to other pane" shortcut="F6" size="sm" disabled={!count || !to.fs} onClick={() => cross("move")}>
+          <MoveArrow />
+        </IconButton>
+      </div>
+      <div
+        className="mt-2 flex w-1.5 flex-1 flex-col-reverse gap-0.5"
+        {...(between.running
+          ? { role: "progressbar", "aria-label": "Transfers between the two panes", "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": Math.round(between.percent ?? 0) }
+          : { "aria-hidden": true })}
+      >
+        {[1, 2, 3, 4, 5].map((stone, i) => (
+          <span key={stone} className="relative flex-1 overflow-hidden bg-foreground/12">
+            <span
+              data-stone={stone}
+              className="absolute inset-0 origin-bottom transition-transform duration-500"
+              style={{ background: `var(--stone-${stone})`, transform: `scaleY(${between.running ? Math.min(1, Math.max(0, built - i)) : 0})` }}
+            />
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -202,7 +261,6 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
   const navigate = useCallback((next: Location) => setPane(index, next), [index, setPane]);
   const refresh = () => void qc.invalidateQueries({ queryKey: ["list", loc.fs, loc.path] });
   /** The same remotes and starting points the location bar's picker offers, for the "nothing open" state. */
-  const locationMenu = useLocationMenuItems(navigate);
 
   /** Select the rows from `range`'s anchor to its cursor, making it the range that Shift extends. */
   const selectRange = (range: RangeEnds) => {
@@ -320,6 +378,18 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
     });
 
   const transferSelection = (mode: "copy" | "move") => canActOn(selectedItems, { byId: true }) && transfer(mode, loc, selectedItems.map(entryOf), other);
+
+  // The buttons between the panes (Crossing) act on the selection of the pane that has the keys: each pane says
+  // how much it has selected, and the active one answers a request to send it across.
+  const setSelectedCount = useExplorerStore((s) => s.setSelectedCount);
+  useEffect(() => setSelectedCount(index, busy ? 0 : selectedItems.length), [setSelectedCount, index, busy, selectedItems.length]);
+  const crossing = useExplorerStore((s) => s.crossing);
+  const answered = useRef(crossing?.n);
+  useEffect(() => {
+    if (!crossing || crossing.n === answered.current) return;
+    answered.current = crossing.n;
+    if (isActive) void transferSelection(crossing.mode);
+  }, [crossing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Open the transfer dialog prefilled with `entries` from `from` (the whole folder when
@@ -583,12 +653,11 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
 
   const totalSize = items.reduce((sum, i) => sum + (i.IsDir ? 0 : (i.Size ?? 0)), 0);
   const selectedSize = selectedItems.reduce((sum, i) => sum + (i.IsDir ? 0 : (i.Size ?? 0)), 0);
-  const CopyArrow = index === 0 ? ArrowRight : ArrowLeft;
 
   return (
     <section
       style={style}
-      className={cn("flex min-w-0 flex-col bg-card", className)}
+      className={cn("flex min-w-0 flex-col bg-background", className)}
       onMouseDown={() => setActive(index)}
       aria-label={`Pane ${index + 1}`}
       // Anywhere in the pane that isn't a folder's name drops into the open folder: the path bar, the toolbar,
@@ -599,39 +668,26 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
       }}
       onDrop={(e) => acceptsDrop(e) && onDrop(loc, e)}
     >
-      <div className={cn("shrink-0", isActive ? "bg-card" : "bg-muted/50")}>
+      {/* The pane that takes the keys is the one whose head stands a step above the listing, under a rule of the accent. */}
+      <div className={cn("shrink-0 transition-[background-color,box-shadow]", isActive ? "bg-card shadow-[inset_0_2px_0_var(--primary)]" : "bg-background")}>
         <LocationBar value={loc} onChange={navigate} onRefresh={refresh} loading={listing.isFetching} editSignal={editSignal} />
         <div className="flex h-9 items-center gap-1 border-b border-border px-2">
           <IconButton label="New folder" size="sm" disabled={!loc.fs || busy} onClick={() => setDialog({ type: "mkdir" })}>
             <FolderPlus />
           </IconButton>
           <ToolbarSeparator />
-          <IconButton label={`Copy to other pane${other.fs ? ` (${formatLocation(other)})` : ""}`} shortcut="F5" size="sm" disabled={!selectedItems.length || !other.fs || busy} onClick={() => transferSelection("copy")}>
-            <CopyArrow />
-          </IconButton>
-          <IconButton label="Move to other pane" shortcut="F6" size="sm" disabled={!selectedItems.length || !other.fs || busy} onClick={() => transferSelection("move")}>
-            <Scissors />
-          </IconButton>
-          <ToolbarSeparator />
           <IconButton label="Rename" shortcut="F2" size="sm" disabled={!single || busy} onClick={() => single && canActOn([single], { byId: true }) && setDialog({ type: "rename", item: single })}>
             <Pencil />
           </IconButton>
           <IconButton label="Delete" shortcut="⌘⌫" size="sm" disabled={!selectedItems.length || busy} onClick={() => canActOn(selectedItems) && setDialog({ type: "delete", items: selectedItems })}>
-            <Trash2 className={cn(selectedItems.length && "text-destructive")} />
+            <Trash2 />
           </IconButton>
           <Menu items={single ? itemMenu(single) : backgroundMenu()} minWidth={200}>
             <IconButton label="More actions" size="sm">
               <MoreHorizontal />
             </IconButton>
           </Menu>
-          <div className="ml-auto flex items-center gap-2 pr-1 text-xs text-muted-foreground">
-            {busy && <Spinner className="size-3.5" />}
-            {selectedItems.length > 0 && (
-              <span className="tnum">
-                {pluralize(selectedItems.length, "item")} selected{selectedSize ? ` · ${formatBytes(selectedSize)}` : ""}
-              </span>
-            )}
-          </div>
+          {busy && <Spinner className="mr-1 ml-auto size-3.5 text-muted-foreground" />}
         </div>
       </div>
 
@@ -649,20 +705,7 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
           if (e.target === e.currentTarget) setSelected(new Set());
         }}
       >
-        {!loc.fs && (
-          <EmptyState
-            icon={<FolderOpen />}
-            title="Nothing open"
-            description="Pick a remote or folder from the menu above, or double-click the path to type one."
-            action={
-              <Menu items={locationMenu} minWidth={220}>
-                <Button variant="outline" icon={<FolderOpen />} iconRight={<ChevronDown />}>
-                  Choose a remote or folder
-                </Button>
-              </Menu>
-            }
-          />
-        )}
+        {!loc.fs && <Places onPick={navigate} />}
         {loc.fs && listing.isLoading && (
           <div className="flex flex-col gap-2 p-3">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -684,9 +727,9 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
         )}
         {listing.data && (
           <div className="min-w-[420px]">
-            {/* The header is opaque under the rows that scroll beneath it; the muted tint sits on top of that. */}
-            <div ref={headerRef} className="sticky top-0 z-10 bg-card">
-              <div className="grid h-10 grid-cols-[minmax(0,1fr)_92px_168px] items-center border-b border-border bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {/* The header is opaque under the rows that scroll beneath it. */}
+            <div ref={headerRef} className="sticky top-0 z-10 bg-background">
+              <div className={cn("grid h-8 items-center border-b border-border text-xs font-medium text-muted-foreground", LISTING_COLUMNS)}>
                 <SortHeader label="Name" active={sortKey === "name"} dir={sortDir} onClick={() => toggleSort("name")} className="pl-3" />
                 <SortHeader label="Size" active={sortKey === "size"} dir={sortDir} onClick={() => toggleSort("size")} className="justify-end pr-3" />
                 <SortHeader label="Modified" active={sortKey === "modTime"} dir={sortDir} onClick={() => toggleSort("modTime")} className="pl-2" />
@@ -711,16 +754,18 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
         {ctx.element}
       </div>
 
-      <div className="flex h-7 shrink-0 items-center justify-between gap-2 border-t border-border bg-muted/40 px-3 text-xs text-muted-foreground">
-        <span className="tnum shrink-0">{listing.data ? `${pluralize(items.length, "item")} · ${formatBytes(totalSize)}` : loc.fs ? "…" : ""}</span>
-        {other.fs ? (
-          <span className="flex min-w-0 items-center gap-1" title={`Other pane: ${formatLocation(other)}`}>
-            <CopyArrow className="size-3 shrink-0" />
-            <span className="truncate">{formatLocation(other)}</span>
-          </span>
-        ) : (
-          <span className="truncate">Open a folder in the other pane to copy between them</span>
-        )}
+      {/* The pane's foot: what is in the folder, or what of it is selected. */}
+      <div className="flex h-7 shrink-0 items-center justify-between gap-2 border-t border-border px-3 text-xs text-muted-foreground">
+        <span className={cn("tnum shrink-0", selectedItems.length > 0 && "text-foreground")}>
+          {selectedItems.length > 0
+            ? `${selectedItems.length} of ${items.length} selected${selectedSize ? `, ${formatBytes(selectedSize)}` : ""}`
+            : listing.data
+              ? `${pluralize(items.length, "item")}, ${formatBytes(totalSize)}`
+              : loc.fs
+                ? "…"
+                : ""}
+        </span>
+        {loc.fs && !other.fs && <span className="truncate">Open a folder in the other pane to copy between them</span>}
       </div>
 
       <PromptDialog
@@ -920,8 +965,10 @@ const FileRow = memo(function FileRow({
       draggable
       style={{ top: index * ROW_HEIGHT }}
       className={cn(
-        "absolute inset-x-0 grid h-9 cursor-default grid-cols-[minmax(0,1fr)_92px_168px] items-center border-b border-border text-sm transition-colors",
-        selected === "active" ? "bg-muted text-foreground" : selected === "inactive" ? "bg-muted/50" : "hover:bg-muted/50",
+        "absolute inset-x-0 grid h-8 cursor-default items-center text-sm",
+        LISTING_COLUMNS,
+        // The selection is the accent's: full in the pane that has the keys, drained to neutral in the other.
+        selected === "active" ? "bg-primary/14" : selected === "inactive" ? "bg-muted" : "hover:bg-muted/60",
         dropTarget && "ring-2 ring-inset ring-primary/70",
       )}
       onClick={(e) => handlers.onClick(item, e)}
@@ -933,25 +980,23 @@ const FileRow = memo(function FileRow({
     >
       <div className="flex min-w-0 items-center pl-3">
         <span data-drop-name className="flex min-w-0 items-center gap-2">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-lg border bg-muted/30">
-            <FileIcon name={item.Name} isDir={item.IsDir} />
-          </span>
-          <span className="truncate font-medium" title={item.Name}>
+          <FileIcon name={item.Name} isDir={item.IsDir} />
+          <span className="truncate" title={item.Name}>
             {item.Name}
           </span>
           {item.IsBucket && <Badge size="sm">bucket</Badge>}
         </span>
       </div>
-      <div className="tnum pr-3 text-right text-xs text-muted-foreground">{item.IsDir ? "—" : formatBytes(item.Size)}</div>
+      <div className={cn("tnum pr-3 text-right text-xs", item.IsDir ? "text-faint-foreground" : "text-muted-foreground")}>{item.IsDir ? "–" : formatBytes(item.Size)}</div>
       <div className="tnum truncate pl-2 text-xs text-muted-foreground">{formatDateTime(item.ModTime)}</div>
     </div>
   );
 });
 
-/** A column label; `uppercase` is repeated here because a button does not inherit text-transform. */
+/** A column label; the one the listing is sorted by is in the foreground colour, with the direction. */
 function SortHeader({ label, active, dir, onClick, className }: { label: string; active: boolean; dir: 1 | -1; onClick: () => void; className?: string }) {
   return (
-    <button type="button" className={cn("no-ring flex h-full items-center gap-1 uppercase hover:text-foreground", active && "text-foreground", className)} onClick={onClick}>
+    <button type="button" className={cn("no-ring flex h-full items-center gap-1 transition-colors hover:text-foreground", active && "text-foreground", className)} onClick={onClick}>
       {label}
       {active && (dir === 1 ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />)}
     </button>
@@ -973,7 +1018,7 @@ function InfoDialog({ loc, item, onClose }: { loc: Location; item: ListItem | nu
         <div className="flex items-center gap-3">
           <FileIcon name={item?.Name ?? ""} isDir={isDir} className="size-8" />
           <div className="min-w-0">
-            <div className="text-sm font-semibold">{item ? (item.IsDir ? "Folder" : (item.MimeType ?? "File")) : "Folder"}</div>
+            <div className="text-sm font-medium">{item ? (item.IsDir ? "Folder" : (item.MimeType ?? "File")) : "Folder"}</div>
             <div className="text-sm text-muted-foreground">{isLocal(loc) ? "On this computer" : `On remote ${loc.fs}`}</div>
           </div>
           {isLocal(loc) && (
@@ -1007,7 +1052,7 @@ function InfoDialog({ loc, item, onClose }: { loc: Location; item: ListItem | nu
         />
         {size.error && <ErrorMessage error={size.error} />}
         <div>
-          <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Storage</div>
+          <GroupLabel className="mb-2">Storage</GroupLabel>
           {about.data ? (
             <KeyValue
               items={[

@@ -1,15 +1,18 @@
-import { FlaskConical } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeftRight, ArrowRight, ArrowRightFromLine, ArrowRightToLine, Equal, FlaskConical } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { fsString, parseLocation, type Location } from "../../lib/paths";
 import { defaultLogChoice, jobLog } from "../../lib/transferLog";
 import { errorMessage } from "../../lib/types";
 import { useAppStore } from "../../store/app";
 import { useJobsStore, type JobKind, type TrackedJob } from "../../store/jobs";
-import { Button, Dialog, ErrorMessage, Segmented, SettingRow, Switch, toast } from "../ui";
+import { Button, Dialog, ErrorMessage, Segmented, SettingRow, Switch, cn, toast } from "../ui";
 import { LocationField } from "./Location";
 import { FormSection, MODES, TransferOptionSections, applyRcOptions, bisyncMaxDelete, blankForm, lines, orderedFilter, rawError, rcOptions, type Mode, type TransferForm } from "./TransferOptions";
 
 export { MODES, blankForm, type Mode, type TransferForm };
+
+/* What stands between the two places: one way, one way and exact, one way and gone from the source, both ways, compared. */
+const OPERATION_GLYPH: Record<Mode, ReactNode> = { copy: <ArrowRight />, sync: <ArrowRightToLine />, move: <ArrowRightFromLine />, bisync: <ArrowLeftRight />, check: <Equal /> };
 
 export function buildJobRequest(f: TransferForm): { rcPath: string; params: Record<string, unknown>; kind: JobKind; title: string } {
   const { config, filter } = rcOptions(f);
@@ -187,21 +190,22 @@ export function TransferDialog({
     >
       {error && <ErrorMessage error={error} onDismiss={() => setError(null)} />}
 
-      <FormSection title="Operation" description={mode.help} collapsible={false}>
-        <Segmented label="Operation" options={MODES.map((m) => ({ value: m.value, label: m.label }))} value={form.mode} onChange={(v) => set("mode", v)} />
-      </FormSection>
-
-      <FormSection
-        title={form.mode === "bisync" ? "Paths" : "Source and destination"}
-        description={form.mode === "bisync" ? "The two paths bisync keeps in step." : "Where the files come from, and where they go."}
-        collapsible={false}
-      >
-        <div className="flex flex-col gap-4">
+      {/* The job in one picture: two places side by side, and between them what is done. Under them the operation
+          is chosen, with what it does to the files beside it (in red when it deletes at the destination). */}
+      <section data-card className="flex flex-col gap-4 rounded-xl bg-card p-4 text-card-foreground ring-1 ring-foreground/10">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-3">
           <LocationField label={form.mode === "bisync" ? "Path 1" : "Source"} required value={form.src} onChange={(l) => set("src", l)} autoFocus />
+          <span aria-hidden data-operation={form.mode} className="flex size-8 items-center justify-center text-muted-foreground [&_svg]:size-4">
+            {OPERATION_GLYPH[form.mode]}
+          </span>
           <LocationField label={form.mode === "bisync" ? "Path 2" : "Destination"} required value={form.dst} onChange={(l) => set("dst", l)} />
-          {missingPaths && <p className="text-sm text-destructive">Choose both a source and a destination.</p>}
         </div>
-      </FormSection>
+        {missingPaths && <p className="text-sm text-destructive">Choose both a source and a destination.</p>}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Segmented label="Operation" options={MODES.map((m) => ({ value: m.value, label: m.label }))} value={form.mode} onChange={(v) => set("mode", v)} />
+          <p className={cn("min-w-0 flex-1 basis-64 text-sm", form.mode === "sync" ? "text-destructive" : "text-muted-foreground")}>{mode.help}</p>
+        </div>
+      </section>
 
       <TransferOptionSections form={form} set={set} variant="dialog" errors={{ extraConfig: rawError(form.extraConfig, "config") ?? undefined, extraFilter: rawError(form.extraFilter, "filter") ?? undefined }} />
 

@@ -3,8 +3,9 @@
 // background); this page lists them with their live state and edits them. Their transfers show on the
 // Transfers page like any other, which is where a running one's progress comes from here too.
 
-import { ArrowRight, FolderSync, History, MoreHorizontal, Pause, Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
+import { ArrowRight, History, MoreHorizontal, Pause, Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Arch } from "../components/app/Arch";
 import { WatchEditorDialog } from "../components/app/WatchEditor";
 import { WatchHistoryDialog } from "../components/app/WatchHistory";
 import {
@@ -107,7 +108,7 @@ export function WatchPage() {
     <>
       <PageHeader
         title="Watch folders"
-        description="Copy, sync, move, bisync or check folders by themselves, when they change or on a schedule."
+        description="Copy, sync, move, bisync or check folders by themselves, when they change or on a schedule"
         actions={
           <>
             <Button size="lg" icon={paused ? <Play /> : <Pause />} loading={pausing} disabled={!paused && watches.length === 0} onClick={togglePaused}>
@@ -155,7 +156,7 @@ export function WatchPage() {
             </div>
           ) : watches.length === 0 ? (
             <EmptyState
-              icon={<FolderSync />}
+              art={<Arch className="w-24" />}
               title="No watch folders yet"
               description={
                 <>
@@ -171,16 +172,15 @@ export function WatchPage() {
               }
             />
           ) : (
-            /* The table runs to the card's edges: the card body's own padding is cancelled here. */
-            <Card bodyClassName="-mx-4 -my-4">
-              <Table>
+            <Card padded={false} className="overflow-hidden">
+              <Table className="[&_td]:align-top">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-4 text-xs">Watch folder</TableHead>
-                    <TableHead className="px-4 text-xs">State</TableHead>
-                    <TableHead className="px-4 text-xs">Last run</TableHead>
-                    <TableHead className="px-4 text-xs">On</TableHead>
-                    <TableHead className="px-4 text-xs text-right">Actions</TableHead>
+                    <TableHead>Watch folder</TableHead>
+                    <TableHead>State</TableHead>
+                    <TableHead>Last run</TableHead>
+                    <TableHead>On</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -248,10 +248,10 @@ function WatchRow({ status, paused, now, onEdit }: { status: WatchStatus; paused
       <TableRow>
         {/* Takes the room left. Names and paths wrap, breaking long path segments anywhere, so they never
             push the other columns out of the table. */}
-        <TableCell className="w-full px-4 py-3 align-top">
+        <TableCell className="w-full">
           <div className="min-w-[200px] whitespace-normal">
             <div className="flex items-start gap-2">
-              <span className="min-w-0 font-semibold [word-break:normal] wrap-anywhere">{rule.name}</span>
+              <span className="min-w-0 font-medium [word-break:normal] wrap-anywhere">{rule.name}</span>
               <Badge size="sm" className="mt-0.5">
                 {actionLabel(rule.action)}
               </Badge>
@@ -271,26 +271,26 @@ function WatchRow({ status, paused, now, onEdit }: { status: WatchStatus; paused
           </div>
         </TableCell>
 
-        <TableCell className="px-4 py-3 align-top">
+        <TableCell>
           <div className="w-[180px] whitespace-normal">
             <StateCell status={status} paused={paused} job={job} now={now} />
           </div>
         </TableCell>
 
-        <TableCell className="px-4 py-3 align-top">
+        <TableCell>
           <div className="w-[170px] whitespace-normal">
             <LastRunCell status={status} now={now} />
           </div>
         </TableCell>
 
-        <TableCell className="px-4 py-3 align-top">
+        <TableCell>
           {/* The switch sits level with the first line of the row's other cells. */}
           <span className="flex h-5 items-center" title={rule.enabled ? "On: turn off to stop watching" : "Off: turn on to start watching"}>
             <Switch checked={rule.enabled} disabled={toggling} onChange={toggle} />
           </span>
         </TableCell>
 
-        <TableCell className="px-4 py-3 align-top">
+        <TableCell>
           <div className="flex items-center justify-end gap-1">
             {running ? (
               <IconButton label={job?.stopRequested ? "Stopping…" : "Stop"} size="sm" disabled={job?.stopRequested} onClick={stop}>

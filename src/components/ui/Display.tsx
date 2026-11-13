@@ -9,15 +9,15 @@ export type Tone = "neutral" | "accent" | "success" | "warning" | "danger" | "in
 /* Each tone sets its own border colour: `cn` only concatenates, and a border-transparent in
    the shared part would win over the outline tone's border-border. */
 const badgeTones: Record<Tone, string> = {
-  neutral: "border-border text-foreground",
-  accent: "border-transparent bg-primary text-primary-foreground",
-  info: "border-transparent bg-primary text-primary-foreground",
-  success: "border-transparent bg-success/10 text-success",
-  warning: "border-transparent bg-warning/10 text-warning",
-  danger: "border-transparent bg-destructive/10 text-destructive dark:bg-destructive/20",
+  neutral: "border-border text-muted-foreground",
+  accent: "border-transparent bg-primary/12 text-primary-ink",
+  info: "border-transparent bg-primary/12 text-primary-ink",
+  success: "border-transparent bg-success/12 text-success",
+  warning: "border-transparent bg-warning/12 text-warning",
+  danger: "border-transparent bg-destructive/12 text-destructive",
 };
 
-/** Pill tag for categories, attributes and counts (not for status; see StatusBadge). */
+/** Small tag for categories and attributes (not for status; see StatusBadge). */
 export function Badge({
   tone = "neutral",
   children,
@@ -32,8 +32,8 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex w-fit shrink-0 items-center justify-center gap-1 rounded-4xl border font-medium whitespace-nowrap [&>svg]:size-3",
-        size === "sm" ? "h-4 px-1.5 text-xs" : "h-5 px-2 py-0.5 text-xs",
+        "inline-flex w-fit shrink-0 items-center justify-center gap-1 rounded-sm border text-xs font-medium whitespace-nowrap [&>svg]:size-3",
+        size === "sm" ? "h-4 px-1" : "h-5 px-1.5",
         badgeTones[tone],
         className,
       )}
@@ -44,14 +44,15 @@ export function Badge({
 }
 
 const dotTones: Record<Tone, string> = {
-  neutral: "bg-muted-foreground",
-  accent: "bg-primary",
+  neutral: "bg-faint-foreground",
+  accent: "bg-primary-ink",
   success: "bg-success",
-  warning: "bg-warning",
+  warning: "bg-signal",
   danger: "bg-destructive",
-  info: "bg-primary",
+  info: "bg-primary-ink",
 };
 
+/** `pulse` is for something happening right now (a run, rclone starting), never for decoration. */
 export function StatusDot({ tone = "neutral", pulse, className }: { tone?: Tone; pulse?: boolean; className?: string }) {
   return <span className={cn("inline-block size-2 shrink-0 rounded-full", dotTones[tone], pulse && "animate-pulse", className)} />;
 }
@@ -79,60 +80,71 @@ export function Spinner({ className }: { className?: string }) {
   return <Loader2 role="status" aria-label="Loading" className={cn("size-4 animate-spin text-muted-foreground", className)} />;
 }
 
-const barTones: Record<Tone, string> = {
+/* A transfer under way fills with the arch's stones; an outcome fills with its status colour. */
+const spanFills: Record<Tone, string> = {
   neutral: "bg-muted-foreground",
-  accent: "bg-primary",
+  accent: "span-stones",
   success: "bg-success",
   warning: "bg-warning",
   danger: "bg-destructive",
-  info: "bg-primary",
+  info: "span-stones",
 };
 
-const trackTones: Record<Tone, string> = {
-  neutral: "bg-muted",
-  accent: "bg-primary/20",
-  success: "bg-success/20",
-  warning: "bg-warning/20",
-  danger: "bg-destructive/20",
-  info: "bg-primary/20",
-};
+/** How work that stopped short is drawn: `broken` (it failed) keeps the stones it laid in grey and marks the one
+ *  it broke on; `drained` (it was stopped, or lost) only keeps them in grey. */
+export type Ended = "broken" | "drained";
 
+/** The stone (0 to 4) the work was on when it had got to `value` percent. */
+export const lastStone = (value: number) => Math.min(4, Math.max(0, Math.ceil(value / 20) - 1));
+
+const spanSizes = { sm: "h-1.5", md: "h-2", lg: "h-2.5" };
+
+/** Progress as a span of five stones (.span in index.css). The fill is clipped, not resized: no layout runs as it grows. */
 export function ProgressBar({
   value,
   indeterminate,
   tone = "accent",
+  ended,
   size = "md",
   className,
 }: {
   value: number;
   indeterminate?: boolean;
   tone?: Tone;
-  size?: "sm" | "md";
+  ended?: Ended;
+  size?: keyof typeof spanSizes;
   className?: string;
 }) {
+  const broke = lastStone(value) * 20;
   return (
     <div
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={indeterminate ? undefined : Math.round(value)}
-      className={cn("relative w-full overflow-hidden rounded-full", trackTones[tone], size === "sm" ? "h-1.5" : "h-2", className)}
+      data-ended={ended}
+      className={cn("span relative w-full overflow-hidden", spanSizes[size], className)}
     >
       {indeterminate ? (
-        <div className={cn("absolute inset-y-0 w-2/5 rounded-full animate-indeterminate", barTones[tone])} />
+        <div className={cn("absolute inset-y-0 w-2/5 animate-indeterminate", spanFills[tone])} />
       ) : (
         <div
-          className={cn("h-full rounded-full transition-all duration-300 ease-out", barTones[tone])}
-          style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+          className={cn("absolute inset-0 transition-[clip-path] duration-300", ended ? "span-drained" : spanFills[tone])}
+          style={{
+            clipPath: `inset(0 ${100 - Math.min(100, Math.max(0, value))}% 0 0)`,
+            ...(ended === "broken" && { backgroundImage: `linear-gradient(90deg, transparent ${broke}%, var(--destructive) 0 ${broke + 20}%, transparent 0)` }),
+          }}
         />
       )}
     </div>
   );
 }
 
-/** Dashed panel for "there is nothing here yet". */
+/** "There is nothing here yet": a quiet icon (or `art`, a drawing at its own size), what is missing, and the one
+ *  thing to do about it. */
 export function EmptyState({
   icon,
+  art,
   title,
   description,
   action,
@@ -140,6 +152,7 @@ export function EmptyState({
   className,
 }: {
   icon?: ReactNode;
+  art?: ReactNode;
   title: ReactNode;
   description?: ReactNode;
   action?: ReactNode;
@@ -149,31 +162,30 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex h-full w-full min-w-0 flex-1 flex-col items-center justify-center rounded-xl border border-dashed text-center text-balance",
-        compact ? "gap-3 p-4" : "gap-4 p-6",
+        "flex h-full w-full min-w-0 flex-1 flex-col items-center justify-center text-center text-balance",
+        compact ? "gap-3 p-4" : "gap-4 p-8",
         className,
       )}
     >
-      {icon && (
-        <div className="mb-2 flex size-8 items-center justify-center rounded-lg bg-muted text-foreground [&_svg]:size-4">{icon}</div>
-      )}
-      <div className="flex max-w-sm flex-col items-center gap-2">
-        <div className="text-sm font-medium tracking-tight">{title}</div>
-        {description && <div className="text-sm/relaxed text-muted-foreground">{description}</div>}
+      {art}
+      {icon && <div className="flex size-5 items-center justify-center text-faint-foreground [&_svg]:size-5">{icon}</div>}
+      <div className="flex max-w-sm flex-col items-center gap-1">
+        <div className="text-sm font-medium">{title}</div>
+        {description && <div className="text-sm text-muted-foreground">{description}</div>}
       </div>
-      {action && <div className="flex flex-col items-center gap-2.5">{action}</div>}
+      {action && <div className="flex flex-col items-center gap-2">{action}</div>}
     </div>
   );
 }
 
-/* The alert recipe: a tinted box, foreground text and a tone-coloured icon. The tone is never
-   the text colour except for destructive, which stays legible on both themes. */
+/* A hairlined box, foreground text and a tone-coloured icon. The tone is never the text colour except
+   for destructive, which stays legible on both themes. */
 const calloutTones: Record<Exclude<Tone, "accent">, { box: string; icon: ReactNode }> = {
   neutral: { box: "border-border bg-card text-card-foreground", icon: <Info className="text-muted-foreground" /> },
-  info: { box: "border-primary/30 bg-primary/10 text-foreground", icon: <Info className="text-primary" /> },
-  success: { box: "border-success/30 bg-success/10 text-foreground", icon: <CircleCheck className="text-success" /> },
-  warning: { box: "border-warning/30 bg-warning/10 text-foreground", icon: <TriangleAlert className="text-warning" /> },
-  danger: { box: "border-destructive/30 bg-destructive/10 text-destructive dark:bg-destructive/20", icon: <CircleX /> },
+  info: { box: "border-border bg-muted/60 text-foreground", icon: <Info className="text-primary-ink" /> },
+  success: { box: "border-success/25 bg-success/8 text-foreground", icon: <CircleCheck className="text-success" /> },
+  warning: { box: "border-warning/30 bg-warning/8 text-foreground", icon: <TriangleAlert className="text-warning" /> },
+  danger: { box: "border-destructive/30 bg-destructive/8 text-destructive", icon: <CircleX /> },
 };
 
 export function Callout({
@@ -196,13 +208,13 @@ export function Callout({
       className={cn(
         "grid w-full items-start gap-x-3 gap-y-0.5 rounded-lg border px-4 py-3 text-sm",
         action ? "grid-cols-[calc(var(--spacing)*4)_1fr_auto]" : "grid-cols-[calc(var(--spacing)*4)_1fr]",
-        "[&>svg]:size-4 [&>svg]:translate-y-0.5",
+        "[&>svg]:mt-0.5 [&>svg]:size-4",
         t.box,
         className,
       )}
     >
       {t.icon}
-      {title && <div className="col-start-2 font-medium tracking-tight">{title}</div>}
+      {title && <div className="col-start-2 font-medium">{title}</div>}
       {children && <div className="selectable col-start-2 min-w-0 break-words">{children}</div>}
       {action && <div className="col-start-3 row-start-1 row-span-2 shrink-0 self-start">{action}</div>}
     </div>
@@ -234,11 +246,12 @@ export function Skeleton({ className, style }: { className?: string; style?: CSS
   return <div className={cn("animate-pulse rounded-md bg-muted", className)} style={style} />;
 }
 
+/** A key of the keyboard, as a small keycap. */
 export function Kbd({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <kbd
       className={cn(
-        "inline-flex h-5 min-w-5 items-center justify-center rounded-sm bg-muted px-1 font-sans text-xs font-medium text-muted-foreground",
+        "inline-flex h-5 min-w-5 items-center justify-center rounded-sm border border-b-2 bg-card px-1 font-sans text-xs text-muted-foreground",
         className,
       )}
     >
@@ -247,39 +260,34 @@ export function Kbd({ children, className }: { children: ReactNode; className?: 
   );
 }
 
-/** A labelled number in its own tile; `size="lg"` is the big dashboard figure. */
-export function Stat({
-  label,
-  value,
-  hint,
-  tone,
-  size = "default",
-  className,
-}: {
-  label: ReactNode;
-  value: ReactNode;
-  hint?: ReactNode;
-  tone?: Tone;
-  size?: "default" | "lg";
-  className?: string;
-}) {
+/** The name of a group of things, above them: quiet, sentence case. */
+export function GroupLabel({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("text-xs font-medium text-muted-foreground", className)}>{children}</div>;
+}
+
+/** A row or grid of figures in one hairlined band; give it the grid's columns and put `Stat`s in it. */
+export function StatStrip({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("grid gap-px overflow-hidden rounded-xl bg-border shadow-card ring-1 ring-border", className)}>{children}</div>;
+}
+
+/** A labelled figure, a cell of a `StatStrip`. */
+export function Stat({ label, value, hint, tone, className }: { label: ReactNode; value: ReactNode; hint?: ReactNode; tone?: Tone; className?: string }) {
   return (
-    <div className={cn("min-w-0 rounded-lg border bg-card p-4", className)}>
-      <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div
-        className={cn(
-          "tnum mt-2 truncate",
-          size === "lg" ? "text-4xl font-bold" : "text-base font-semibold",
-          tone === "danger" && "text-destructive",
-          tone === "success" && "text-success",
-        )}
-      >
-        {value}
-      </div>
+    <div className={cn("min-w-0 bg-card px-4 py-3", className)}>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className={cn("tnum mt-1 truncate text-lg font-medium", tone === "danger" && "text-destructive", tone === "success" && "text-success")}>{value}</div>
       {hint && <div className="truncate text-xs text-muted-foreground">{hint}</div>}
     </div>
   );
 }
+
+/* A set of choices on a muted track; the chosen one is a raised surface with a hairline. Shared by Tabs and
+   Segmented (Input.tsx), which set the height and text size. */
+export const segmentTrack = "inline-flex w-fit items-center rounded-lg bg-muted p-0.5 text-muted-foreground";
+export const segmentItem =
+  "no-ring inline-flex h-full items-center justify-center gap-1.5 rounded-md border border-transparent px-2 font-medium whitespace-nowrap transition-colors " +
+  "hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 " +
+  "data-[state=active]:border-border data-[state=active]:bg-raised data-[state=active]:text-foreground";
 
 /** Segmented control used as a tab bar. */
 export function Tabs({
@@ -294,10 +302,7 @@ export function Tabs({
   className?: string;
 }) {
   return (
-    <div
-      role="tablist"
-      className={cn("inline-flex h-8 w-fit items-center justify-center rounded-lg bg-muted p-[3px] text-muted-foreground", className)}
-    >
+    <div role="tablist" className={cn(segmentTrack, "h-8", className)}>
       {tabs.map((t) => {
         const isActive = t.id === active;
         return (
@@ -308,12 +313,7 @@ export function Tabs({
             aria-selected={isActive}
             data-state={isActive ? "active" : "inactive"}
             onClick={() => onChange(t.id)}
-            className={cn(
-              "no-ring inline-flex h-[calc(100%-1px)] items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-colors",
-              "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-              "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
-              "dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30",
-            )}
+            className={cn(segmentItem, "text-sm")}
           >
             {t.label}
             {t.count !== undefined && <span className="tnum text-xs font-normal text-muted-foreground">{t.count}</span>}
@@ -349,10 +349,7 @@ export function Card({
      only the inset its header needs. `cn` concatenates: each case is a separate branch. */
   const cardPadding = padded ? (footer ? "pt-4" : "py-4") : hasHeader ? "pt-4" : undefined;
   return (
-    <section
-      className={cn("flex flex-col gap-4 rounded-xl bg-card text-sm text-card-foreground ring-1 ring-foreground/10", cardPadding, className)}
-      {...rest}
-    >
+    <section data-card className={cn("flex flex-col gap-4 rounded-xl bg-card text-sm text-card-foreground shadow-card ring-1 ring-border", cardPadding, className)} {...rest}>
       {hasHeader && (
         <header className={cn("grid items-start gap-1 px-4", actions && "grid-cols-[1fr_auto]")}>
           <div className="min-w-0">
@@ -393,7 +390,7 @@ export function SettingRow({
 
 export function KeyValue({ items, className }: { items: { label: ReactNode; value: ReactNode; mono?: boolean }[]; className?: string }) {
   return (
-    <dl className={cn("grid grid-cols-[max-content_1fr] gap-x-5 gap-y-1.5 text-sm", className)}>
+    <dl className={cn("grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm", className)}>
       {items.map((it, i) => (
         <div key={i} className="contents">
           <dt className="text-muted-foreground">{it.label}</dt>
