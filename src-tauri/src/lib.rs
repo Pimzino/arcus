@@ -121,6 +121,8 @@ pub fn run() {
             });
 
             tauri::async_runtime::spawn(prune_transfer_logs(app.handle().clone()));
+            #[cfg(unix)]
+            tauri::async_runtime::spawn(shutdown::quit_on_signals(app.handle().clone()));
             watch::start(app.handle().clone());
             // The tray was made before the watch rules were loaded; show their paused state now.
             background::refresh_tray(app.handle());

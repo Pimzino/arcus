@@ -8,7 +8,8 @@
 //! Now an exit request is held back: the window and the tray icon go at once, every rclone is stopped
 //! side by side off the main thread (with SIGTERM where there is one, see `daemon::terminate`), and
 //! only then does the app exit for real. An exit that cannot be held back (a restart) still stops them
-//! in `Exit`, where it is quick now too.
+//! in `Exit`, where it is quick now too. On Unix, the system's own requests to quit (SIGTERM at logout or
+//! shutdown, `kill`, Ctrl-C) take the same way out (`quit_on_signals`).
 
 use crate::AppState;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -69,6 +70,33 @@ pub async fn stop_everything(app: &AppHandle) {
         log::warn!("stopping the rclone daemon: {err}");
     }
     log::info!("rclone stopped for quitting in {} ms", started.elapsed().as_millis());
+}
+
+/// Unix: SIGTERM, SIGINT and SIGHUP quit the app as its menu does, so `on_run_event` stops every rclone first.
+/// Left to their default action they end the process at once, and the main daemon (whose death signal is only set
+/// on Linux) would live on. Once handled here, a second signal while stopping does nothing; SIGKILL still works.
+#[cfg(unix)]
+pub async fn quit_on_signals(app: AppHandle) {
+    use tokio::signal::unix::{signal, SignalKind};
+    let listen = |kind| {
+        signal(kind)
+            .map_err(|e| log::error!("cannot listen for signals to quit on: {e}"))
+            .ok()
+    };
+    let (Some(mut term), Some(mut int), Some(mut hup)) = (
+        listen(SignalKind::terminate()),
+        listen(SignalKind::interrupt()),
+        listen(SignalKind::hangup()),
+    ) else {
+        return;
+    };
+    let name = tokio::select! {
+        _ = term.recv() => "SIGTERM",
+        _ = int.recv() => "SIGINT",
+        _ = hup.recv() => "SIGHUP",
+    };
+    log::info!("{name} received; quitting");
+    app.exit(0);
 }
 
 /// Mark the app as quitting from code that ends the process itself (the Windows update installer).
