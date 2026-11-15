@@ -152,10 +152,11 @@ export default function App() {
     );
   }
   return (
-    <div className="flex h-full flex-col">
+    // The window is the wall (the sidebar's surface); each page is a sheet standing on it, inset at the edges.
+    <div className="flex h-full flex-col bg-sidebar">
       <div className="flex min-h-0 flex-1">
         <Sidebar />
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+        <main className="my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-background shadow-sheet ring-1 ring-border">
           {/* One entrance: the page that is opened rises into place. */}
           <div key={page} className="flex min-h-0 flex-1 flex-col animate-page-in">
             {renderPage(page)}

@@ -8,6 +8,7 @@
 import { Check, ChevronDown, ChevronRight, ChevronUp, Copy, ExternalLink, Eye, EyeOff, KeyRound, LogIn } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Callout, Card, Checkbox, Dialog, ErrorMessage, Field, GroupLabel, Input, SearchInput, Select, Spinner, Textarea, cn, toast } from "../components/ui";
+import { Seal } from "../components/app/Seal";
 import { pluralize } from "../lib/format";
 import { useProviders, type RemoteInfo } from "../lib/hooks";
 import { copyToClipboard, openExternal } from "../lib/native";
@@ -425,28 +426,48 @@ export function RemoteWizard({ mode, remote, onClose, onSaved }: { mode: "create
           ? "Finish signing in with your browser."
           : "rclone needs one more answer.";
 
+  const pick = (p: Provider) => {
+    setProvider(p);
+    setValues({});
+    setAuthMode("browser");
+    setInvalid(null);
+    setStep("form");
+  };
+
+  // Each provider under the seal its remotes will carry, so the one chosen here is recognised in the gallery after.
   const ProviderRow = ({ p }: { p: Provider }) => (
     <button
       key={p.Name}
       type="button"
       className={cn(
-        "no-ring flex w-full items-center gap-3 px-3 py-2 text-sm hover:bg-muted focus-visible:bg-muted",
+        "no-ring flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-muted focus-visible:bg-muted",
         provider?.Name === p.Name && "bg-muted",
       )}
-      onClick={() => {
-        setProvider(p);
-        setValues({});
-        setAuthMode("browser");
-        setInvalid(null);
-        setStep("form");
-      }}
+      onClick={() => pick(p)}
     >
+      <Seal type={p.Name} className="size-7 rounded-md text-[11px]" />
       <span className="min-w-0 flex-1 truncate text-left font-medium" title={p.Description}>
         {p.Description}
       </span>
       {usesOAuth(p) && <span className="shrink-0 text-xs text-muted-foreground">sign in with browser</span>}
       <span className="shrink-0 font-mono text-xs text-muted-foreground">{p.Name}</span>
       <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+    </button>
+  );
+
+  const ProviderTile = ({ p }: { p: Provider }) => (
+    <button
+      type="button"
+      onClick={() => pick(p)}
+      className="no-ring flex min-w-0 items-center gap-3 rounded-xl bg-card p-3 text-left shadow-card ring-1 ring-border transition-[box-shadow,background-color] hover:ring-foreground/25 focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      <Seal type={p.Name} className="size-10 rounded-lg" />
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-medium" title={p.Description}>
+          {p.Description}
+        </span>
+        <span className="block truncate text-xs text-muted-foreground">{usesOAuth(p) ? "Sign in with browser" : p.Name}</span>
+      </span>
     </button>
   );
 
@@ -509,10 +530,12 @@ export function RemoteWizard({ mode, remote, onClose, onSaved }: { mode: "create
             )}
             {filteredProviders.popular.length > 0 && (
               <>
-                <GroupLabel className="px-3 pt-1 pb-2">Popular</GroupLabel>
-                {filteredProviders.popular.map((p) => (
-                  <ProviderRow key={p.Name} p={p} />
-                ))}
+                <GroupLabel className="px-3 pt-2 pb-3">Popular</GroupLabel>
+                <div className="grid grid-cols-3 gap-2 px-3">
+                  {filteredProviders.popular.map((p) => (
+                    <ProviderTile key={p.Name} p={p} />
+                  ))}
+                </div>
                 <GroupLabel className="px-3 pt-6 pb-2">All providers</GroupLabel>
               </>
             )}

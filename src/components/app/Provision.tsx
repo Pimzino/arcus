@@ -31,6 +31,18 @@ const PHASE_INDEX: Record<string, number> = {
   failed: -1,
 };
 
+/** How far an install has got, as a share of its phases (the download counting by its bytes), and whether it
+ *  failed; null before it starts. What the Setup page's arch is built from. */
+export function provisionProgress(events: ProvisionEvent[]): { value: number; failed: boolean } | null {
+  if (events.length === 0) return null;
+  const last = events[events.length - 1];
+  if (last.phase === "done") return { value: 100, failed: false };
+  const current = Math.max(...events.map((e) => PHASE_INDEX[e.phase] ?? 0));
+  const download = [...events].reverse().find((e) => e.phase === "downloading");
+  const within = current === PHASE_INDEX.downloading && download?.phase === "downloading" && download.total ? download.received / download.total : 0;
+  return { value: ((current + within) / PHASES.length) * 100, failed: last.phase === "failed" };
+}
+
 /** Collects `rclone:provision` events while an install runs. */
 export function useProvisionEvents() {
   const [events, setEvents] = useState<ProvisionEvent[]>([]);

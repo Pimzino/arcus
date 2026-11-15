@@ -202,8 +202,8 @@ transfer list already polls, so it costs no extra rc calls.
 The mark is an arch of five stones that step from deep to light blue, the way files cross from one pane to
 the other, held together by its keystone: the part rclone plays here. All branding lives in [`branding/`](branding/): the app icon master (`app-icon.png`) and every platform icon
 made from it (`icons/`, which `tauri.conf.json` points the bundle at), the mark, wordmark, lockups and favicon as
-SVG (`svg/`), the typeface (`fonts/`: Sora, under the SIL Open Font License, plus the Latin subset the app uses
-for its large headings), the tray and menu bar icons (`icons/tray.png`, `icons/tray-template.png`) and
+SVG (`svg/`), the typeface (`fonts/`: Sora, under the SIL Open Font License, a variable font the app uses as it
+is), the tray and menu bar icons (`icons/tray.png`, `icons/tray-template.png`) and
 `brand-sheet.png`. One script, `branding/build.py`, draws all of it from the
 geometry and colours at its top, and also writes the React components the app draws its logo with
 (`src/components/app/Brand.tsx`). To change the brand, edit the script and run it:
@@ -214,9 +214,14 @@ python3 -m venv .venv-brand && .venv-brand/bin/pip install skia-python fonttools
 .venv-brand/bin/python branding/build.py --tray   # only the tray and menu bar icons
 ```
 
-The wordmark's typeface, Sora SemiBold, is used for page, section and dialog titles only. All other
-text is in the system font (SF Pro on macOS, Segoe UI on Windows), which reads better at small sizes and in
-dense tables and keeps the app native on each platform.
+The wordmark's typeface, Sora, sets the titles (semibold) and the large figures (light). All other text is in
+the system font (SF Pro on macOS, Segoe UI on Windows), which reads better at small sizes and in dense tables
+and keeps the app native on each platform.
+
+The app is drawn from the mark: the window is a wall, each page a sheet standing on it, and the arch is what
+moves. A transfer's progress is the arch built stone by stone (Transfers, a job's details, the sidebar's dock
+while something runs), the same five stones laid flat between a source and its destination, and an aqueduct of
+unbuilt arches where nothing has been carried yet.
 
 ## Development
 
@@ -274,11 +279,13 @@ node e2e/macos-app.mjs
 # updater (found, nothing newer, offline, bad signature). Screenshots and report.json in e2e/artifacts/update-ui/.
 node e2e/update-ui.mjs
 # The look (macOS): every screen in WebKit, in the light and the dark theme, against the design's rules
-# (src/index.css): type, corner radii, row heights, contrast of each text colour, and the drawing of two places
-# with a span between them: the logo's arch built stone by stone on Transfers and in a job's details, each job
-# as source, five stones and destination on one line, the explorer's empty pane listing the places to open and
-# the copy and move buttons and seam of stones between its panes, and the new transfer form's two places with
-# the operation's sign between them. Screenshots and report.json in e2e/artifacts/design-redline/.
+# (src/index.css): type, corner radii, row heights, contrast of each text colour, the page as a sheet on the
+# wall with the sidebar's dock, and the drawing of two places with a span between them: the logo's arch built
+# stone by stone on Transfers, in a job's details and on each watch folder, each job as source, five stones and
+# destination on one line, remotes as a gallery under their seals, mounts as remote joined to folder, the
+# explorer's panes headed by their place with the copy and move buttons and seam of stones between them, the
+# new transfer form's two places with the operation's sign between them, and an aqueduct on the empty pages.
+# Screenshots and report.json in e2e/artifacts/design-redline/.
 node e2e/design-redline.mjs
 ```
 

@@ -1,6 +1,6 @@
 import { ArrowLeftRight, CircleStop, FileText, FolderOpen, FolderSync, Info, MoreHorizontal, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Arch } from "../components/app/Arch";
+import { Aqueduct, Arch } from "../components/app/Arch";
 import { useFileManager } from "../components/app/FileManager";
 import { activityFacts, PhaseLine } from "../components/app/JobActivity";
 import { JobDetailsDialog } from "../components/app/JobDetails";
@@ -10,7 +10,7 @@ import { Throughput } from "../components/app/Throughput";
 import { buildJobRequest, formFromJob, MODES, TransferDialog, type Mode, type TransferForm } from "../components/app/TransferDialog";
 import {
   Button,
-  Card,
+  ProgressBar,
   EmptyState,
   IconButton,
   Menu,
@@ -22,7 +22,6 @@ import {
   TableCell,
   TableHead,
   TableHeader,
-  TableRow,
   Tabs,
   cn,
   toast,
@@ -40,6 +39,15 @@ import { sessionTotals, transferSummary, useJobsStore, type TrackedJob } from ".
 import { useThroughput } from "../store/throughput";
 
 type Filter = "all" | "running" | "done" | "failed";
+
+/* The edge a job's card has on its left, in the colour of how it stands; a finished job has none. */
+const EDGE: Record<TrackedJob["status"], string> = {
+  running: "[&>td:first-child]:shadow-[inset_3px_0_0_var(--primary)]",
+  success: "",
+  error: "[&>td:first-child]:shadow-[inset_3px_0_0_var(--destructive)]",
+  stopped: "[&>td:first-child]:shadow-[inset_3px_0_0_var(--warning)]",
+  lost: "[&>td:first-child]:shadow-[inset_3px_0_0_var(--faint-foreground)]",
+};
 
 const STATUS: Record<TrackedJob["status"], { tone: Tone; label: string }> = {
   running: { tone: "accent", label: "Running" },
@@ -112,7 +120,7 @@ export function TransfersPage() {
           {jobs.length > 0 && <TransferHero jobs={jobs} />}
           {visible.length === 0 ? (
             <EmptyState
-              {...(jobs.length === 0 ? { art: <Arch className="w-24" /> } : { icon: <ArrowLeftRight /> })}
+              {...(jobs.length === 0 ? { art: <Aqueduct className="w-64" /> } : { icon: <ArrowLeftRight /> })}
               title={jobs.length === 0 ? "No transfers yet" : "Nothing here"}
               description={jobs.length === 0 ? "Start one here, or select files in the explorer and copy them to the other pane." : "No jobs match this filter."}
               action={
@@ -124,17 +132,17 @@ export function TransfersPage() {
               }
             />
           ) : (
-            <Card padded={false} className="overflow-hidden">
-              {/* Fixed layout: columns keep the widths set here (each fits its longest value, e.g. 1023 MiB/s),
-                  so speed and ETA ticking over never resize them and the row never shifts sideways. */}
-              <Table className="table-fixed [&_td]:align-top">
+            // Each job is a card of its own, a row of the table underneath (so its columns line up from job to job
+            // and it reads as a table to assistive technology). Fixed layout: columns keep the widths set here, so
+            // speed and ETA ticking over never resize them and the row never shifts sideways.
+            <Table className="table-fixed border-separate border-spacing-y-3 [&_td]:align-top">
                 <TableHeader>
-                  <TableRow>
+                  <tr>
                     <TableHead className="w-28">Status</TableHead>
                     <TableHead>Job</TableHead>
                     <TableHead className="w-48 text-right">Progress</TableHead>
                     <TableHead className="w-[100px] text-right">Actions</TableHead>
-                  </TableRow>
+                  </tr>
                 </TableHeader>
                 <TableBody>
                   {visible.map((job) => (
@@ -142,7 +150,6 @@ export function TransfersPage() {
                   ))}
                 </TableBody>
               </Table>
-            </Card>
           )}
         </div>
       </PageBody>
@@ -155,10 +162,11 @@ export function TransfersPage() {
 const leaf = (path: string) => path.split("/").filter(Boolean).pop() ?? path;
 
 /**
- * What is moving right now: the arch, built as far as the running transfers have got, with its piers named after
- * the two places when one transfer runs; their combined speed, and how that speed has gone. Under the speed, in
- * a sentence, what the jobs started since the app opened have done (each runs in its own rclone, so they are
- * summed here).
+ * What is moving right now, as the page's one large picture. The arch is built as far as the running transfers
+ * have got together, its piers named after the two places when one transfer runs; beside it their combined speed,
+ * set large and light. When several run, each stands under it as a small arch of its own: the viaduct. Along the
+ * foot runs the channel, the speed over the last minute, and what has been carried since Arcus opened (each
+ * transfer runs in its own rclone, so they are summed here).
  */
 function TransferHero({ jobs }: { jobs: TrackedJob[] }) {
   const now = useMemo(() => transferSummary(jobs), [jobs]);
@@ -166,41 +174,83 @@ function TransferHero({ jobs }: { jobs: TrackedJob[] }) {
   const samples = useThroughput();
   const [figure, unit] = formatSpeed(now.speed).split(" ");
   const running = jobs.filter((j) => j.status === "running");
+  const inFlight = running.flatMap((j) => j.stats?.transferring ?? []);
   return (
-    <section aria-label="Transfers right now" className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-8 rounded-xl bg-card px-6 py-5 text-card-foreground shadow-card ring-1 ring-border">
-      <figure className="w-40">
-        <Arch
-          label={now.running ? "Progress of the running transfers" : undefined}
-          value={now.running ? (now.percent ?? 0) : undefined}
-          indeterminate={now.running > 0 && now.percent === null}
-        />
-        {running.length === 1 && (
-          <figcaption className="mt-2 grid grid-cols-2 gap-4 font-mono text-xs text-muted-foreground" title={`${running[0].source} → ${running[0].destination}`}>
-            <span className="truncate">{leaf(running[0].source)}</span>
-            <span className="truncate text-right">{leaf(running[0].destination)}</span>
-          </figcaption>
-        )}
-      </figure>
-      {/* As wide as its longest line, so the chart beside it never moves as the figures change. */}
-      <div className="w-60">
-        <div className="text-sm text-muted-foreground">{now.running ? `${pluralize(now.running, "transfer")} running` : "Nothing running"}</div>
-        <div className={cn("tnum mt-1 text-4xl leading-10 font-medium tracking-tight", !now.running && "text-muted-foreground")}>
-          {figure}
-          <span className="ml-1.5 text-lg font-normal tracking-normal text-muted-foreground">{unit}</span>
+    // It lays itself out by its own width (a container), so it stays whole in the smallest window: the arch is
+    // smaller there, and the files in flight only show where there is room for them beside the figures.
+    <section aria-label="Transfers right now" className="@container overflow-hidden rounded-2xl bg-card text-card-foreground shadow-card ring-1 ring-border">
+      <div className="flex items-center gap-8 px-8 pt-7 pb-6 @4xl:gap-12">
+        <figure className="w-40 shrink-0 @3xl:w-56">
+          <Arch
+            label={now.running ? "Progress of the running transfers" : undefined}
+            value={now.running ? (now.percent ?? 0) : undefined}
+            indeterminate={now.running > 0 && now.percent === null}
+          />
+          {running.length === 1 && (
+            <figcaption className="mt-3 grid grid-cols-2 gap-4 font-mono text-xs text-muted-foreground" title={`${running[0].source} → ${running[0].destination}`}>
+              <span className="truncate">{leaf(running[0].source)}</span>
+              <span className="truncate text-right">{leaf(running[0].destination)}</span>
+            </figcaption>
+          )}
+        </figure>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm text-muted-foreground">{now.running ? `${pluralize(now.running, "transfer")} running` : "Nothing running"}</div>
+          <div className={cn("tnum mt-2 font-display text-7xl leading-none font-light tracking-tight", !now.running && "text-muted-foreground")}>
+            {figure}
+            <span className="ml-3 font-sans text-2xl font-normal tracking-normal text-muted-foreground">{unit}</span>
+          </div>
+          {now.percent !== null && (
+            <div className="tnum mt-4 truncate text-base">
+              {Math.round(now.percent)}% of {formatBytes(now.totalBytes)}
+              {now.eta !== null && <span className="text-muted-foreground">, {formatEta(now.eta)} left</span>}
+            </div>
+          )}
+          {running.length > 1 && (
+            <ul aria-label="Each running transfer" className="mt-5 flex flex-wrap gap-x-6 gap-y-3">
+              {running.slice(0, 6).map((job) => (
+                <li key={job.id} className="flex w-44 min-w-0 items-end gap-2.5" title={`${job.title}: ${job.source} → ${job.destination}`}>
+                  <Arch className="w-9" {...jobProgress(job)} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs font-medium">{job.title}</span>
+                    <span className="tnum block truncate text-xs text-muted-foreground">{job.stats ? formatSpeed(job.stats.speed) : "Starting…"}</span>
+                  </span>
+                </li>
+              ))}
+              {running.length > 6 && <li className="self-end text-xs text-muted-foreground">and {running.length - 6} more</li>}
+            </ul>
+          )}
         </div>
-        {now.percent !== null && (
-          <div className="tnum mt-1 truncate text-sm">
-            {Math.round(now.percent)}% of {formatBytes(now.totalBytes)}
-            {now.eta !== null && <span className="text-muted-foreground">, {formatEta(now.eta)} left</span>}
+        {inFlight.length > 0 && (
+          // The files crossing right now, each with how far it has got: what the figures are made of.
+          <div className="hidden w-72 shrink-0 self-stretch border-l pl-8 @4xl:block">
+            <div className="text-sm text-muted-foreground">In flight</div>
+            <ul aria-label="Files in flight" className="mt-4 flex flex-col gap-4">
+              {inFlight.slice(0, 4).map((f) => (
+                <li key={f.name} title={f.name}>
+                  <div className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="truncate">{leaf(f.name)}</span>
+                    <span className="tnum shrink-0 text-xs text-muted-foreground">{f.percentage ?? 0}%</span>
+                  </div>
+                  <ProgressBar className="mt-1.5" size="sm" value={f.percentage ?? 0} />
+                  <div className="tnum mt-1 truncate text-xs text-muted-foreground">
+                    {formatBytes(f.bytes)} of {formatBytes(f.size)}, {formatSpeed(f.speed)}
+                  </div>
+                </li>
+              ))}
+              {inFlight.length > 4 && <li className="text-xs text-muted-foreground">and {pluralize(inFlight.length - 4, "file")} more</li>}
+            </ul>
           </div>
         )}
+      </div>
+      {/* The channel along the foot: the speed over the last minute, under a hairline like the aqueduct's deck. */}
+      <div className="border-t bg-background/40 px-8 pt-4 pb-4">
+        <Throughput samples={samples} className="h-16" />
         <div className="tnum mt-3 truncate text-xs text-muted-foreground" title={session.lastError ?? undefined}>
           Since Arcus opened: {formatBytes(session.bytes)} in {pluralize(session.transfers, "file")}
           {session.checks > 0 && `, ${session.checks} checked`}
           {session.errors > 0 && <span className="text-destructive">, {pluralize(session.errors, "error")}</span>}
         </div>
       </div>
-      <Throughput samples={samples} className="h-32" />
     </section>
   );
 }
@@ -312,7 +362,15 @@ function JobRow({ job }: { job: TrackedJob }) {
 
   return (
     <>
-      <TableRow>
+      {/* The card: a hairline round the row and its surface on every cell, its rounded ends on the first and last,
+          and on the first an edge in the colour of how it stands (running, failed, stopped). */}
+      <tr
+        className={cn(
+          "[&>td]:border-y [&>td]:bg-card [&>td]:py-4 [&>td]:transition-colors hover:[&>td]:bg-raised/40",
+          "[&>td:first-child]:rounded-l-2xl [&>td:first-child]:border-l [&>td:last-child]:rounded-r-2xl [&>td:last-child]:border-r",
+          EDGE[job.status],
+        )}
+      >
         <TableCell>
           {/* As tall as the job's title beside it, so the dot and the title share a line. */}
           <StatusBadge tone={status.tone} pulse={isRunning} className="h-5">
@@ -382,7 +440,7 @@ function JobRow({ job }: { job: TrackedJob }) {
             </Menu>
           </div>
         </TableCell>
-      </TableRow>
+      </tr>
 
       {details && <JobDetailsDialog job={job} onClose={() => setDetails(false)} />}
       {showLog && job.logPath && <LogViewerDialog open onClose={() => setShowLog(false)} title={`Log of ${job.title}`} path={job.logPath} live={isRunning} />}

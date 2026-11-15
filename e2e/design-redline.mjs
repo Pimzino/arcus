@@ -11,10 +11,14 @@
 //   - the arch: the Transfers page opens on the brand's arch as a gauge, built a stone for each fifth of the
 //     running work, its piers named after the two places, beside the speed now and a chart of the last minute;
 //     a job's details show its own arch, whole once it finished and, when it failed, grey with the stone it
-//     broke on in red; an empty page shows the arch unbuilt;
+//     broke on in red;
 //   - the span: every job is drawn as its source, five flat stones and its destination on one line, the stones
 //     in the arch's colours (whole when it finished, grey and red when it failed); a status is a dot and text;
-//   - the explorer: an empty pane lists the places it can open, remotes under their seals; between the panes
+//   - the shell: the page is a sheet standing on the wall (the sidebar's surface), and while something runs the
+//     sidebar's dock shows it as an arch with its speed; the empty pages show an aqueduct of unbuilt arches;
+//   - remotes, mounts and watch folders are places, not table rows: a gallery of remotes under their seals, a
+//     mount as its remote joined to its folder, a watch folder as its two places with an arch for its last run;
+//   - the explorer: each pane is headed by the place it shows; an empty pane lists the places it can open; between the panes
 //     stand the two ways to send the selection across, and a seam of stones that fills while a transfer runs
 //     between the two places; the stone in the sidebar stands beside the page that is open;
 //   - a new transfer: the two places side by side with the operation's sign between them, and what the
@@ -96,7 +100,11 @@ localStorage.setItem('arcus-shim:settings', JSON.stringify({ settingsVersion: 2,
   const RC = {
     'config/dump': { box: { type: 'box' }, 'archive-b2': { type: 'b2' }, gdrive: { type: 'drive' }, 'nas-over-sftp-with-a-long-name': { type: 'sftp' } },
     'config/listremotes': { remotes: ['box', 'archive-b2', 'gdrive', 'nas-over-sftp-with-a-long-name'] },
-    'config/providers': { providers: [] },
+    'config/providers': { providers: [
+      ['drive', 'Google Drive', true], ['onedrive', 'Microsoft OneDrive', true], ['dropbox', 'Dropbox', true], ['s3', 'Amazon S3 Compliant Storage Providers', false],
+      ['sftp', 'SSH/SFTP', false], ['box', 'Box', true], ['b2', 'Backblaze B2', false], ['webdav', 'WebDAV', false], ['ftp', 'FTP', false], ['smb', 'SMB / CIFS', false],
+      ['seafile', 'seafile', false], ['zoho', 'Zoho', true],
+    ].map(([Name, Description, oauth]) => ({ Name, Description, Prefix: Name, Options: oauth ? [{ Name: 'client_id' }, { Name: 'token' }] : [{ Name: 'host' }] })) },
     'operations/list': { list: LIST },
     'operations/about': { total: 2e12, used: 1.74e12, free: 0.26e12 },
     'operations/fsinfo': { Name: 'box', Root: '', String: 'box root', Precision: 1e9, Hashes: ['sha1'], Features: { About: true, Copy: true, Move: true } },
@@ -129,6 +137,12 @@ function arch(root) {
   const a = root.querySelector("[data-arch]");
   if (!a) throw new Error("no arch in " + name(root));
   return { role: a.getAttribute("role"), now: a.getAttribute("aria-valuenow"), outlines: $$("g > g > path:not([data-stone])", a).length, laid: $$("[data-stone]", a).map((p) => ({ stone: p.dataset.stone, share: p.getAttribute("stroke-dasharray"), colour: css(p).stroke })), doorway: a.textContent.trim(), width: a.getBoundingClientRect().width };
+}
+/** What the empty page's drawing is: an aqueduct of so many arches under a deck. */
+function aqueduct() {
+  const a = document.querySelector("main [data-aqueduct]");
+  if (!a) throw new Error("no aqueduct on the page");
+  return { stones: $$("g > g > path", a).length, width: Math.round(a.getBoundingClientRect().width) };
 }
 /** Opens the details of the job in the given row of the Transfers table. */
 async function details(row) {
@@ -203,6 +217,8 @@ function audit() {
     strokes: [...new Set($$("svg.lucide").filter(visible).map((e) => parseFloat(css(e).strokeWidth)))],
     nav: [...new Set($$("aside nav button").map((b) => b.getBoundingClientRect().height))],
     navFont: css(document.querySelector("aside nav button")).fontFamily,
+    sheet: (() => { const m = css(document.querySelector("main")); return { radius: parseFloat(m.borderTopLeftRadius), inset: Math.round(document.querySelector("main").getBoundingClientRect().top), background: m.backgroundColor, wall: css(document.querySelector("aside")).backgroundColor }; })(),
+    dock: document.querySelector("[data-now-dock]")?.textContent ?? null,
     // How far the sidebar's stone stands from the middle of the entry that is open.
     navStone: (() => { const mid = (e) => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; }; return Math.abs(mid(document.querySelector("[data-nav-stone]")) - mid(document.querySelector("aside nav [aria-current=page]"))); })(),
     title: title && { text: title.textContent, font: css(title).fontFamily, description: title.nextElementSibling?.tagName === "P" ? title.nextElementSibling.textContent : null },
@@ -245,7 +261,8 @@ pairs["primary-foreground on primary"] = contrast(token("primary-foreground"), t
 const rows = $$("[role=row]");
 const icon = (file) => css(byText("[role=row] span", file).closest("[role=row]").querySelector("svg")).color;
 const gutter = document.querySelector('[aria-label="Between the panes"]');
-return JSON.stringify({ ...audit(), theme: document.documentElement.dataset.theme, pairs, rows: rows.length, rowHeights: [...new Set(rows.map((r) => r.getBoundingClientRect().height))], paneRules: $$('[aria-label^="Pane "]').map((p) => css(p.firstElementChild).boxShadow !== "none"), folder: icon("Day 11"), file: icon("grade-notes.txt"), ink: token("primary-ink"), muted: token("muted-foreground"),
+const heads = $$("[data-place-head]").map((h) => h.textContent);
+return JSON.stringify({ ...audit(), heads, theme: document.documentElement.dataset.theme, pairs, rows: rows.length, rowHeights: [...new Set(rows.map((r) => r.getBoundingClientRect().height))], paneRules: $$('[aria-label^="Pane "]').map((p) => css(p.firstElementChild).boxShadow !== "none"), folder: icon("Day 11"), file: icon("grade-notes.txt"), ink: token("primary-ink"), muted: token("muted-foreground"),
   places: $$('[aria-label="Pane 2"] [role=grid] button').map((b) => ({ seal: b.querySelector("[data-seal]")?.textContent ?? null, name: b.querySelector("span span").textContent })),
   crossing: { buttons: $$("button", gutter).map((b) => [b.getAttribute("aria-label"), b.disabled]), seam: gutter.querySelector("[role=progressbar]") !== null, stones: $$("[data-stone]", gutter).length } });`,
   ],
@@ -263,11 +280,24 @@ useJobsStore.setState({ jobs: [{ ...base, id: "x1", jobid: 9, title: "Copy grade
 await sleep(400);
 const gutter = document.querySelector('[aria-label="Between the panes"]');
 const seam = gutter.querySelector("[role=progressbar]");
-return JSON.stringify({ ...audit(), there, buttons: $$("button", gutter).map((b) => [b.getAttribute("aria-label"), b.disabled]), copy: { background: css(gutter.querySelector("button")).backgroundColor, primary: token("primary") },
+return JSON.stringify({ ...audit(), there, heads: $$("[data-place-head]").map((h) => ({ text: h.querySelector("h2")?.textContent, seal: h.querySelector("[data-seal]")?.textContent ?? null })), buttons: $$("button", gutter).map((b) => [b.getAttribute("aria-label"), b.disabled]), copy: { background: css(gutter.querySelector("button")).backgroundColor, primary: token("primary") },
   foot: document.querySelector('[aria-label="Pane 1"]').lastElementChild.textContent.trim(), seam: seam && { now: seam.getAttribute("aria-valuenow"), stones: $$("[data-stone]", seam).map((s) => s.style.transform) } });`,
   ],
-  ["2-remotes", `await go("Remotes"); return JSON.stringify({ ...audit(), remotes: $$("tbody tr").length, seals: $$("tbody td:first-child span[aria-hidden]").map((x) => ({ text: x.textContent, contrast: contrast(css(x).color, css(x).backgroundColor) })) });`],
-  ["3-transfers-empty", `(await module("/src/store/jobs.ts")).useJobsStore.setState({ jobs: [] }); await go("Transfers"); return JSON.stringify({ ...audit(), arch: arch(document.querySelector("main")), hero: !!document.querySelector('section[aria-label="Transfers right now"]') });`],
+  ["2-remotes", `await go("Remotes"); return JSON.stringify({ ...audit(), remotes: $$("[data-remote]").length, names: $$("[data-remote] button.font-display").map((b) => b.textContent), add: !!byText("button span", "Add a remote"), seals: $$("[data-remote] [data-seal]").map((x) => ({ text: x.textContent, contrast: contrast(css(x).color, css(x).backgroundColor) })) });`],
+  [
+    "2b-new-remote",
+    `byText("button", "Add remote").click();
+await sleep(600);
+const dialog = document.querySelector("[role=dialog]");
+// The tiles and the rows are the buttons under a seal: the tiles in the grid of popular providers, the rows after it.
+const sealed = $$("button", dialog).filter((b) => b.querySelector("[data-seal]"));
+const words = (b) => [...b.querySelectorAll(":scope > span:not([data-seal]) span, :scope > span:not([data-seal])")].filter((e) => !e.children.length).map((e) => e.textContent).join(" ");
+const tiles = sealed.filter((b) => b.closest(".grid")).map((b) => ({ seal: b.querySelector("[data-seal]").textContent, text: words(b) }));
+const rows = sealed.filter((b) => !b.closest(".grid")).map((b) => b.querySelector("[data-seal]").textContent);
+// The dialog stays open for the screenshot; the next step's go() closes it.
+return JSON.stringify({ ...audit(), tiles, rows });`,
+  ],
+  ["3-transfers-empty", `(await module("/src/store/jobs.ts")).useJobsStore.setState({ jobs: [] }); await go("Transfers"); return JSON.stringify({ ...audit(), aqueduct: aqueduct(), hero: !!document.querySelector('section[aria-label="Transfers right now"]') });`],
   [
     "4-transfers",
     `${JOBS}${COLOURS}
@@ -312,10 +342,43 @@ byText("[role=radio]", "Copy", dialog).click();
 await sleep(300);
 return JSON.stringify({ ...audit(), dialog: !!dialog, fields, signLeft: Math.round(sign().getBoundingClientRect().left), copy, sync, destructive: token("destructive"), muted: token("muted-foreground"), frames: $$("[data-card]", dialog).filter((c) => css(c).boxShadow !== "none" || css(c).backgroundColor !== "rgba(0, 0, 0, 0)").length });`,
   ],
-  ["9-watch-folders", `await go("Watch folders"); return JSON.stringify({ ...audit(), arch: arch(document.querySelector("main")) });`],
-  ["10-mounts", `await go("Mounts"); return JSON.stringify({ ...audit(), mounts: $$("dl").length });`],
+  ["9-watch-folders", `await go("Watch folders"); return JSON.stringify({ ...audit(), aqueduct: aqueduct() });`],
+  [
+    "9b-watch-folder",
+    `// A rule whose last run went well, and one whose last run failed.
+const { useWatchStore } = await module("/src/store/watch.ts");
+const { defaultWatchRule } = await module("/src/lib/types.ts");
+const now = Math.floor(Date.now() / 1000);
+const run = (status, error) => ({ id: "r-" + status, ruleId: "w", startedAtUnix: now - 600, finishedAtUnix: now - 540, status, error, daemonId: null, jobid: null, logPath: null, bytes: 4.2e8, transfers: 12, checks: 3, deletes: 0, errors: error ? 1 : 0 });
+const watch = (id, name, source, destination, lastRun) => ({ rule: { ...defaultWatchRule, id, name, source, destination }, state: "idle", stateDetail: null, runAtUnix: null, nextIntervalAtUnix: null, lastRun, running: null });
+useWatchStore.setState({ loaded: true, error: null, paused: false, watches: [
+  watch("w1", "Camera cards to Box", "/Volumes/A012/DCIM", "box:Shared/Productions/A Very Long Production Name/S04/Rushes", run("success", null)),
+  watch("w2", "Exports to Drive", "/Users/me/Exports", "gdrive:Exports", run("error", "permission denied")),
+] });
+await sleep(400);
+const cards = $$("[data-watch]").map((c) => ({ name: c.querySelector("h3").textContent, arch: arch(c), span: c.querySelector("[role=progressbar]").getAttribute("aria-valuenow"), text: c.innerText.replace(/\\s+/g, " ") }));
+return JSON.stringify({ ...audit(), cards });`,
+  ],
+  ["10-mounts", `await go("Mounts"); return JSON.stringify({ ...audit(), mounts: $$("[data-mount]").map((m) => m.innerText.replace(/\\s+/g, " ")) });`],
   ["11-console", `await go("Console"); return JSON.stringify(audit());`],
-  ["12-settings", `await go("Settings"); return JSON.stringify(audit());`],
+  ["12-settings", `await go("Settings"); const nav = $$("main nav button"); const open = nav.find((b) => b.getAttribute("aria-current")); return JSON.stringify({ ...audit(), sections: nav.map((b) => [b.textContent, !!b.querySelector("svg")]), open: open && { text: open.textContent, raised: css(open).boxShadow !== "none", icon: css(open.querySelector("svg")).color, ink: token("primary-ink") } });`],
+  [
+    "13-setup",
+    `// rclone not installed, and an install halfway through its download: the arch is built to that point.
+const { useAppStore } = await module("/src/store/app.ts");
+const was = useAppStore.getState().daemon;
+useAppStore.setState({ daemon: { ...was, state: "notInstalled" } });
+useAppStore.getState().setPage("setup");
+await sleep(600);
+const page = () => document.querySelector("main");
+const before = arch(page());
+const emit = window.__arcusShim.emit;
+const url = "https://downloads.rclone.org/v1.75.1/rclone-v1.75.1-osx-arm64.zip";
+for (const e of [{ phase: "resolvingVersion" }, { phase: "fetchingChecksums", version: "v1.75.1", url }, { phase: "verifyingSignature" }, { phase: "crossCheck", source: "GitHub releases API", status: "match", detail: "GitHub's digest matches the PGP-signed checksum" }, { phase: "downloading", url, received: 16248226, total: 32496452 }]) emit("rclone:provision", e);
+await sleep(600);
+const halfway = { arch: arch(page()), caption: page().querySelector("figcaption").textContent };
+return JSON.stringify({ ...audit(), before, halfway });`,
+  ],
 ];
 
 // ----- checks -----
@@ -340,6 +403,7 @@ function evaluate(theme, results) {
     check(`${step}: sidebar rows are 32 tall`, JSON.stringify(v.nav) === "[32]", v.nav);
     check(`${step}: the sidebar is in the system font`, !v.navFont.includes("Sora"), v.navFont);
     check(`${step}: the sidebar's stone stands beside the open page`, v.navStone < 0.5, v.navStone);
+    check(`${step}: the page is a sheet with corners of 12, inset 8 from the window's top, on a wall of another shade`, v.sheet.radius === 12 && v.sheet.inset === 8 && v.sheet.background !== v.sheet.wall, v.sheet);
     if (v.title) {
       check(`${step}: the page title is in the display face`, v.title.font.includes("Sora"), v.title);
       if (v.title.description !== null) check(`${step}: the page description ends without a full stop`, !/[.!]$/.test(v.title.description), v.title.description);
@@ -358,14 +422,29 @@ function evaluate(theme, results) {
     check("every text colour reaches 4.5:1 on every surface (the faint one 3:1)", low.length === 0, low.length ? low : explorer.pairs);
     check("the listing shows its rows, each 32 tall", explorer.rows === 9 && JSON.stringify(explorer.rowHeights) === "[32]", { rows: explorer.rows, heights: explorer.rowHeights });
     check("the pane that takes the keys is the one under a rule of the accent", JSON.stringify(explorer.paneRules) === "[true,false]", explorer.paneRules);
+    check("the pane with a folder open is headed by the folder's name, on this computer; the empty one says nothing is open", explorer.heads.length === 2 && /On this computer/.test(explorer.heads[0]) && explorer.heads[1].startsWith("Nothing open"), explorer.heads);
     check("an empty pane lists the places it can open: the remotes under their seals, a way to add one, and this computer's folders", JSON.stringify(explorer.places.slice(0, 5)) === JSON.stringify([{ seal: "B2", name: "archive-b2" }, { seal: "BO", name: "box" }, { seal: "DR", name: "gdrive" }, { seal: "SF", name: "nas-over-sftp-with-a-long-name" }, { seal: null, name: "Add a remote" }]) && explorer.places.length > 5, explorer.places);
     check("with nothing selected, Copy and Move between the panes are off and the seam of five stones is unbuilt", JSON.stringify(explorer.crossing) === JSON.stringify({ buttons: [["Copy to other pane", true], ["Move to other pane", true]], seam: false, stones: 5 }), explorer.crossing);
     check("a folder's icon is the accent, a file's is neutral", explorer.folder === explorer.ink && explorer.file === explorer.muted, { folder: explorer.folder, file: explorer.file, ink: explorer.ink, muted: explorer.muted });
   }
   const remotes = step("2-remotes");
   if (remotes) {
-    check("the remotes table lists the four remotes", remotes.remotes === 4, remotes.remotes);
+    check("the remotes stand as a gallery of four places, each named large, with a place to add one", remotes.remotes === 4 && JSON.stringify(remotes.names) === '["archive-b2","box","gdrive","nas-over-sftp-with-a-long-name"]' && remotes.add, { remotes: remotes.remotes, names: remotes.names, add: remotes.add });
     check("each remote carries a seal of its backend's first two letters, legible on its blue", JSON.stringify(remotes.seals.map((x) => x.text)) === '["B2","BO","DR","SF"]' && remotes.seals.every((x) => x.contrast >= 4.5), remotes.seals);
+  }
+  const wizard = step("2b-new-remote");
+  if (wizard) {
+    check("adding a remote starts from the popular providers as tiles, each under the seal its remotes will carry", JSON.stringify(wizard.tiles.map((t) => t.seal)) === '["DR","ON","DR","S3","SF","BO","B2","WE","FT","SM"]', wizard.tiles);
+    check("a provider that signs in with the browser says so on its tile", wizard.tiles.find((t) => t.seal === "BO")?.text === "Box Sign in with browser" && wizard.tiles.find((t) => t.seal === "SF")?.text === "SSH/SFTP sftp", wizard.tiles);
+    check("the providers not in the tiles are listed under their seals", JSON.stringify(wizard.rows) === '["SE","ZO"]', wizard.rows);
+  }
+  const settings = step("12-settings");
+  if (settings) check("each settings section is listed under its icon, and the one in view is a raised stone with its icon in the accent", settings.sections.length >= 9 && settings.sections.every(([, icon]) => icon) && settings.open?.text === "rclone engine" && settings.open.raised && settings.open.icon === settings.open.ink, { sections: settings.sections, open: settings.open });
+  const setup = step("13-setup");
+  if (setup) {
+    check("before rclone is installed, the Setup page's arch stands unbuilt", setup.before.laid.length === 0 && setup.before.outlines === 5, setup.before);
+    // Four of the eight phases done and half the download: 4.5 / 8 of the work, so two stones and four fifths of the third.
+    check("halfway through the download the arch is built to 56 percent, and says so", setup.halfway.arch.now === "56" && setup.halfway.arch.laid.length === 3 && /^0\.81\d* 1$/.test(setup.halfway.arch.laid[2].share) && setup.halfway.caption === "Installing rclone56% done", setup.halfway);
   }
   const transfers = step("4-transfers");
   if (transfers) {
@@ -385,17 +464,25 @@ function evaluate(theme, results) {
     // 3.1 of 9.8 GB is 31.6%: the first stone whole and 0.58 of the second, in their own colours, and no keystone yet.
     const built = (a) => a.role === "progressbar" && a.now === "32" && a.doorway === "" && a.outlines === 5 && a.laid.length === 2 && a.laid[0].share === "1 1" && a.laid[0].colour === stones[0] && /^0\.58\d* 1$/.test(a.laid[1].share) && a.laid[1].colour === stones[1];
     check("the page opens on the arch, built to 32 percent: one stone and 0.58 of the next", built(hero.arch), hero.arch);
-    check("its piers are named after the two places; beside it the speed, how far and how long, and the session in a sentence", /^Camera A Day 12 1 transfer running 12\.3 ?MiB\/s 32% of 9\.1 GiB, 59m 59s left Since Arcus opened: 2\.9 GiB in 3 files /.test(hero.text), hero.text);
+    check("its piers are named after the two places; beside it the speed, how far and how long, then the files in flight, the channel and the session", /^Camera A Day 12 1 transfer running 12\.3 ?MiB\/s 32% of 9\.1 GiB, 59m 59s left In flight A012_C004_0412XY\.mov 45% 1\.8 GiB of 3\.9 GiB, 7\.7 MiB\/s 16\.0 MiB\/s ?1 min ago Since Arcus opened: 2\.9 GiB in 3 files/.test(hero.text), hero.text);
+    check("while it runs, the sidebar's dock shows its speed, its name and how far it has got", transfers.dock === "12.3MiB/sCopy Season 4 rushes32%, 59m 59s left", transfers.dock);
     check("the chart draws the last minute's speed up to now against a scale of 16 MiB/s", hero.chart.label === "Speed over the last minute, now 12.3 MiB/s" && /^M1\d\d[\d.]* [\d.]+Q.*L119 [\d.]+$/.test(hero.chart.line) && hero.text.includes("16.0 MiB/s1 min ago") && hero.chart.width > 300, hero.chart);
     const empty = step("3-transfers-empty");
-    const unbuilt = (a) => a.role === null && a.outlines === 5 && a.laid.length === 0;
-    if (empty) check("with no transfers the page shows the arch unbuilt, and no figures", unbuilt(empty.arch) && !empty.hero, { arch: empty.arch, hero: empty.hero });
+    // Three arches of five stones, two of them sharing each inner pier.
+    const drawn = (a) => a.stones === 15 && a.width >= 240;
+    if (empty) check("with no transfers the page shows an aqueduct of three unbuilt arches, and no figures", drawn(empty.aqueduct) && !empty.hero && empty.dock === null, { aqueduct: empty.aqueduct, hero: empty.hero, dock: empty.dock });
     const watch = step("9-watch-folders");
-    if (watch) check("with no watch folders the page shows the arch unbuilt", unbuilt(watch.arch), watch.arch);
+    if (watch) check("with no watch folders the page shows the aqueduct", drawn(watch.aqueduct), watch.aqueduct);
+    const rules = step("9b-watch-folder");
+    if (rules) {
+      const [good, bad] = rules.cards;
+      check("a watch folder is a card of its two places: its name, the span between them as its last run left it, and that run", rules.cards.length === 2 && good.name === "Camera cards to Box" && /\/Volumes\/A012\/DCIM.*box:Shared\/Productions/.test(good.text) && /Last run Finished/.test(good.text) && good.span === "100", rules.cards.map((c) => c.text));
+      check("its arch stands whole after a good last run, and grey with its last stone red after a failed one", good.arch.laid.length === 5 && JSON.stringify(good.arch.laid.map((l) => l.colour)) === JSON.stringify(transfers.stones) && bad.arch.laid.length === 5 && bad.arch.laid[4].colour === transfers.destructive && !transfers.stones.includes(bad.arch.laid[0].colour), { good: good.arch, bad: bad.arch });
+    }
     const details = step("5-job-details");
     if (details) {
       check("a dialog's corners are 12 and its title is in the display face", details.dialogRadius === 12 && details.dialogTitleFont.includes("Sora"), { radius: details.dialogRadius, font: details.dialogTitleFont });
-      check("the running job's details show its own arch, built to 32 percent", built(details.arch) && details.arch.width > hero.arch.width, details.arch);
+      check("the running job's details show its own arch, built to 32 percent", built(details.arch) && details.arch.width >= 160, details.arch);
     }
     const whole = step("6-job-finished");
     if (whole) check("a finished job's arch stands whole, each stone in its own colour", whole.arch.now === "100" && JSON.stringify(whole.arch.laid.map((s) => [s.share, s.colour])) === JSON.stringify(stones.map((c) => ["1 1", c])), whole.arch);
@@ -416,10 +503,11 @@ function evaluate(theme, results) {
     const [[copyLabel, copyOff], [moveLabel, moveOff]] = spanStep.buttons;
     check("with a file selected and a remote open opposite, Copy and Move stand ready between the panes, Copy in the accent and naming where it goes", copyLabel === `Copy to other pane (${spanStep.there})` && spanStep.there === "box:" && !copyOff && moveLabel === "Move to other pane" && !moveOff && spanStep.copy.background === spanStep.copy.primary, { buttons: spanStep.buttons, copy: spanStep.copy });
     check("the pane's foot says what is selected", spanStep.foot === "1 of 9 selected, 1.9 KiB", spanStep.foot);
+    check("the pane opened on a remote is headed by the remote's name under its seal", spanStep.heads[1]?.text === "box" && spanStep.heads[1].seal === "BO", spanStep.heads);
     check("a transfer between the two places half done builds the seam half way up: two stones and half the keystone", spanStep.seam?.now === "50" && JSON.stringify(spanStep.seam.stones) === '["scaleY(1)","scaleY(1)","scaleY(0.5)","scaleY(0)","scaleY(0)"]', spanStep.seam);
   }
   const mounts = step("10-mounts");
-  if (mounts) check("both mounts are shown", mounts.mounts === 2, mounts.mounts);
+  if (mounts) check("each mount is its remote, under its seal, joined to the folder it appears at", JSON.stringify(mounts.mounts.map((m) => m.split(" Mounted")[0])) === JSON.stringify(["BO box box:Shared/Productions /Users/me/mnt/box-productions", "SF nas-over-sftp-with-a-long-name nas-over-sftp-with-a-long-name:/volume1/media/archive/2025 /Volumes/Archive"]), mounts.mounts);
   return checks;
 }
 

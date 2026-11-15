@@ -169,8 +169,8 @@ export function EmptyState({
     >
       {art}
       {icon && <div className="flex size-5 items-center justify-center text-faint-foreground [&_svg]:size-5">{icon}</div>}
-      <div className="flex max-w-sm flex-col items-center gap-1">
-        <div className="text-sm font-medium">{title}</div>
+      <div className={cn("flex flex-col items-center", art ? "max-w-md gap-2" : "max-w-sm gap-1")}>
+        <div className={art ? "font-display text-xl leading-7 font-semibold tracking-tight" : "text-sm font-medium"}>{title}</div>
         {description && <div className="text-sm text-muted-foreground">{description}</div>}
       </div>
       {action && <div className="flex flex-col items-center gap-2">{action}</div>}

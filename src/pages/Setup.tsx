@@ -1,7 +1,8 @@
 import { Download, Play, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { LogViewerDialog } from "../components/app/LogViewer";
-import { ProvisionProgress, useProvisionEvents } from "../components/app/Provision";
+import { Arch } from "../components/app/Arch";
+import { ProvisionProgress, provisionProgress, useProvisionEvents } from "../components/app/Provision";
 import { Button, Callout, Card, ErrorMessage, KeyValue, PageBody, PageHeader, Spinner } from "../components/ui";
 import { api } from "../lib/tauri";
 import { errorMessage, type LatestVersion } from "../lib/types";
@@ -17,6 +18,7 @@ export function SetupPage() {
   const refreshStatus = useAppStore((s) => s.refreshStatus);
   const setPage = useAppStore((s) => s.setPage);
   const { events, reset } = useProvisionEvents();
+  const progress = provisionProgress(events);
   const [installing, setInstalling] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,9 +67,38 @@ export function SetupPage() {
 
   return (
     <>
-      <PageHeader title="Setup" description="Arcus runs the official rclone engine, which it downloads and verifies itself." />
+      <PageHeader title="Setup" description="Arcus runs the official rclone engine, which it downloads and verifies itself" />
       <PageBody>
-        <div className="mx-auto flex w-full max-w-xl flex-col gap-6">
+        {/* The engine as the arch: unbuilt until rclone is installed, built phase by phase as it is downloaded and
+            verified, whole once it runs, and broken where an install failed. */}
+        <div className="mx-auto grid w-full max-w-4xl grid-cols-[auto_minmax(0,1fr)] items-start gap-12 py-4">
+          <figure className="sticky top-0 w-64">
+            <Arch
+              label="rclone's installation"
+              {...(daemon.state === "running"
+                ? { value: 100 }
+                : progress
+                  ? { value: progress.value, ended: progress.failed ? "broken" : undefined }
+                  : {})}
+            />
+            <figcaption className="mt-5 text-center">
+              <span className="block font-display text-xl leading-7 font-semibold tracking-tight">
+                {daemon.state === "running"
+                  ? `rclone ${daemon.info?.version ?? ""} is running`
+                  : progress?.failed
+                    ? "The install stopped"
+                    : progress
+                      ? "Installing rclone"
+                      : installed
+                        ? "rclone is installed"
+                        : "rclone is not installed yet"}
+              </span>
+              <span className="tnum mt-1 block text-sm text-muted-foreground">
+                {progress && !progress.failed && daemon.state !== "running" ? `${Math.round(progress.value)}% done` : "The engine every transfer runs on"}
+              </span>
+            </figcaption>
+          </figure>
+          <div className="flex min-w-0 flex-col gap-6">
           {daemon.state === "running" && (
             <Callout
               tone="success"
@@ -145,6 +176,7 @@ export function SetupPage() {
               {error && <ErrorMessage error={error} onDismiss={() => setError(null)} />}
             </Card>
           )}
+          </div>
         </div>
       </PageBody>
       <LogViewerDialog open={showLog} onClose={() => setShowLog(false)} title="rclone daemon log" path="daemon" />

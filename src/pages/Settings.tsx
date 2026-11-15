@@ -77,17 +77,18 @@ import { defaultLogChoice } from "../lib/transferLog";
 import { defaultSettings, errorMessage, type EmailSettings, type LatestVersion, type RcOption, type Settings } from "../lib/types";
 import { useAppStore, useDaemonRunning } from "../store/app";
 
+/** The sections, each under the icon its card carries. */
 const SECTIONS = [
-  { id: "engine", label: "rclone engine" },
-  { id: "daemon", label: "Daemon" },
-  { id: "config", label: "Config file" },
-  { id: "transfers", label: "Transfers & logs" },
-  { id: "background", label: "Background" },
-  { id: "email", label: "Email notifications" },
-  { id: "options", label: "Global options" },
-  { id: "macos", label: "macOS permissions" },
-  { id: "appearance", label: "Appearance" },
-  { id: "about", label: "About" },
+  { id: "engine", label: "rclone engine", icon: <Package /> },
+  { id: "daemon", label: "Daemon", icon: <Server /> },
+  { id: "config", label: "Config file", icon: <FileCog /> },
+  { id: "transfers", label: "Transfers & logs", icon: <ScrollText /> },
+  { id: "background", label: "Background", icon: <Power /> },
+  { id: "email", label: "Email notifications", icon: <Mail /> },
+  { id: "options", label: "Global options", icon: <SlidersHorizontal /> },
+  { id: "macos", label: "macOS permissions", icon: <ShieldCheck /> },
+  { id: "appearance", label: "Appearance", icon: <Palette /> },
+  { id: "about", label: "About", icon: <Info /> },
 ];
 
 export function SettingsPage() {
@@ -101,7 +102,7 @@ export function SettingsPage() {
       <PageHeader title="Settings" description="The rclone engine, its daemon and how Arcus behaves" />
       <div className="flex min-h-0 flex-1">
         <SectionNav sections={sections} body={body} content={content} />
-        <div ref={setBody} className="min-h-0 flex-1 overflow-y-auto overscroll-none px-6 py-6">
+        <div ref={setBody} className="min-h-0 flex-1 overflow-y-auto overscroll-none px-8 py-7 [scrollbar-gutter:stable]">
           <div ref={setContent} className="mx-auto flex max-w-3xl flex-col gap-6">
             <Section id="engine">
               <RcloneVersionCard />
@@ -229,7 +230,8 @@ function SectionNav({ sections, body, content }: { sections: typeof SECTIONS; bo
   }, [body, content, sections]);
 
   return (
-    <nav ref={navRef} className="flex w-48 shrink-0 flex-col gap-0.5 border-r p-2">
+    // The sections as the sidebar lists the pages: the open one a stone raised out of the column, its icon in the accent.
+    <nav ref={navRef} className="flex w-56 shrink-0 flex-col gap-0.5 border-r bg-sidebar/50 px-3 py-4">
       {sections.map((s) => (
         <button
           key={s.id}
@@ -237,12 +239,13 @@ function SectionNav({ sections, body, content }: { sections: typeof SECTIONS; bo
           onClick={() => jump(s.id)}
           aria-current={active === s.id ? "true" : undefined}
           className={cn(
-            "no-ring flex h-8 w-full shrink-0 items-center rounded-lg px-2 text-left text-sm font-medium transition-colors",
+            "no-ring group flex h-8 w-full shrink-0 items-center gap-2.5 rounded-lg px-2.5 text-left text-sm font-medium transition-[background-color,color,box-shadow]",
             "focus-visible:ring-3 focus-visible:ring-ring/50",
-            active === s.id ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            active === s.id ? "bg-card text-foreground shadow-card ring-1 ring-border" : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
           )}
         >
-          {s.label}
+          <span className={cn("flex size-4 shrink-0 items-center justify-center [&_svg]:size-4", active === s.id && "text-primary-ink")}>{s.icon}</span>
+          <span className="truncate">{s.label}</span>
         </button>
       ))}
     </nav>
@@ -502,7 +505,7 @@ function RcloneVersionCard() {
         <SettingField label="Pin a version" description="Leave empty to follow the latest stable release.">
           <div className="flex gap-2">
             <Input className="flex-1" value={pinned} placeholder="v1.75.1" onChange={(e) => setPinned(e.target.value)} />
-            <Button variant="default" onClick={() => run("Could not save", () => saveSettings({ pinnedRcloneVersion: pinned.trim() || null }), "Saved")}>
+            <Button variant="outline" onClick={() => run("Could not save", () => saveSettings({ pinnedRcloneVersion: pinned.trim() || null }), "Saved")}>
               Save
             </Button>
           </div>
@@ -523,7 +526,7 @@ function RcloneVersionCard() {
                 Choose…
               </Button>
             )}
-            <Button variant="default" onClick={() => run("Could not save", () => saveSettings({ customRcloneBinary: custom.trim() || null }), "Saved")}>
+            <Button variant="outline" onClick={() => run("Could not save", () => saveSettings({ customRcloneBinary: custom.trim() || null }), "Saved")}>
               Save
             </Button>
           </div>
@@ -597,7 +600,7 @@ function DaemonCard() {
     >
       <KeyValue
         items={[
-          { label: "State", value: daemon.state, mono: false },
+          { label: "State", value: daemon.state.charAt(0).toUpperCase() + daemon.state.slice(1), mono: false },
           { label: "Version", value: daemon.info?.version ?? "–" },
           { label: "Address", value: daemon.info ? `127.0.0.1:${daemon.info.port}` : "–" },
           { label: "PID", value: daemon.info?.pid ?? "–" },

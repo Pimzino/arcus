@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
-/* Made by branding/build.py: Sora SemiBold (SIL Open Font License, branding/fonts/OFL.txt), Latin subset. */
+/* Sora, the wordmark's typeface (SIL Open Font License, branding/fonts/OFL.txt), every weight from one variable
+   file: semibold for titles, light for the large figures. */
 @font-face {
   font-family: "Sora";
-  src: url("../branding/fonts/Sora-SemiBold-latin.ttf") format("truetype");
-  font-weight: 600;
+  src: url("../branding/fonts/Sora[wght].ttf") format("truetype");
+  font-weight: 100 800;
   font-style: normal;
   font-display: block;
 }
@@ -23,8 +24,9 @@
 @theme {
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial,
     sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-  /* Sora, the wordmark's typeface, for the large headings only (page, section and dialog titles); all other
-     text stays in the system font, which reads better small and keeps the app native on each platform. */
+  /* Sora, the wordmark's typeface, for the titles (page, section and dialog) and the large figures, set light like
+     numbers cut in stone; all other text stays in the system font, which reads better small and keeps the app
+     native on each platform. */
   --font-display: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
@@ -141,6 +143,7 @@
   --shadow-card: var(--card-shadow);
   --shadow-button: var(--button-shadow);
   --shadow-dialog: var(--dialog-shadow);
+  --shadow-sheet: var(--sheet-shadow);
 }
 
 :root {
@@ -151,7 +154,7 @@
   --background: oklch(0.985 0.003 266);
   --foreground: oklch(0.17 0.045 266);
   --muted-foreground: oklch(0.45 0.035 266);
-  --faint-foreground: oklch(0.62 0.025 266);
+  --faint-foreground: oklch(0.58 0.025 266);
   --card: oklch(1 0 0);
   --card-foreground: var(--foreground);
   --popover: oklch(1 0 0);
@@ -165,13 +168,15 @@
   --accent-foreground: var(--foreground);
   --border: oklch(0.17 0.045 266 / 10%);
   --input: oklch(0.17 0.045 266 / 18%);
-  --sidebar: oklch(0.965 0.008 266);
+  /* The wall the pages stand on: the window around the sheet, and the sidebar. */
+  --sidebar: oklch(0.935 0.012 266);
   --sidebar-foreground: var(--foreground);
-  --sidebar-accent: oklch(0.17 0.045 266 / 7%);
+  --sidebar-accent: oklch(0.17 0.045 266 / 6%);
   --sidebar-border: var(--border);
   --card-shadow: 0 1px 2px oklch(0.17 0.045 266 / 6%);
   --button-shadow: inset 0 1px 0 oklch(1 0 0 / 18%), 0 1px 2px oklch(0.17 0.045 266 / 24%);
   --dialog-shadow: 0 24px 64px -16px oklch(0.17 0.045 266 / 35%), 0 2px 6px oklch(0.17 0.045 266 / 10%);
+  --sheet-shadow: 0 1px 2px oklch(0.17 0.045 266 / 6%), 0 12px 32px -20px oklch(0.17 0.045 266 / 30%);
   --scrim: oklch(0.17 0.045 266 / 40%);
   /* The brand's second stone, #1548e7: 6.9:1 under white text, and against the light surfaces as text. */
   --primary: oklch(0.488 0.243 264.376);
@@ -181,7 +186,7 @@
   /* Status colours, toned to sit inside the palette; each reaches 4.5:1 as text on its theme's surfaces. */
   --destructive: oklch(0.53 0.19 27);
   --success: oklch(0.5 0.11 160);
-  --warning: oklch(0.54 0.12 65);
+  --warning: oklch(0.5 0.12 65);
   --terminal: oklch(0.17 0.045 266);
   --terminal-fg: oklch(0.965 0.008 266);
   /* The arch's five stones, left to right (branding/build.py): four blues stepping from deep to light, and the
@@ -194,7 +199,10 @@
   --stone-5: #85c4ff;
 }
 
-:root[data-theme="dark"] {
+/* The dark theme, for the whole app or for one part of it that is always dark (the console): data-theme="dark" on
+   any element gives what is inside it the dark tokens. */
+:root[data-theme="dark"],
+[data-theme="dark"] {
   color-scheme: dark;
   /* The brand's midnight: the page is its deep end, and each surface above it a step toward its light end. */
   --background: oklch(0.17 0.035 266);
@@ -209,11 +217,12 @@
   --accent: oklch(0.28 0.05 266);
   --border: oklch(0.8 0.08 266 / 14%);
   --input: oklch(0.8 0.08 266 / 24%);
-  --sidebar: oklch(0.145 0.035 266);
+  --sidebar: oklch(0.13 0.03 266);
   --sidebar-accent: oklch(0.8 0.08 266 / 13%);
   --card-shadow: inset 0 1px 0 oklch(1 0 0 / 4%);
   --button-shadow: inset 0 1px 0 oklch(1 0 0 / 16%), 0 1px 2px oklch(0 0 0 / 40%);
   --dialog-shadow: inset 0 1px 0 oklch(1 0 0 / 6%), 0 24px 64px -16px oklch(0 0 0 / 70%);
+  --sheet-shadow: inset 0 1px 0 oklch(1 0 0 / 5%), 0 16px 40px -24px oklch(0 0 0 / 80%);
   --scrim: oklch(0.08 0.03 266 / 72%);
   /* A step up from #1548e7, so the fill stands off the dark surfaces: 5.2:1 under its text. As text the blue
      has to be far lighter to be read, between the fourth and fifth stones. */

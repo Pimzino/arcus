@@ -3,16 +3,16 @@
 // background); this page lists them with their live state and edits them. Their transfers show on the
 // Transfers page like any other, which is where a running one's progress comes from here too.
 
-import { ArrowRight, History, MoreHorizontal, Pause, Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
+import { ArrowRight, CircleStop, History, MoreHorizontal, Pause, Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Arch } from "../components/app/Arch";
+import { Aqueduct, Arch } from "../components/app/Arch";
+import { jobProgress, Span } from "../components/app/Span";
 import { WatchEditorDialog } from "../components/app/WatchEditor";
 import { WatchHistoryDialog } from "../components/app/WatchHistory";
 import {
   Badge,
   Button,
   Callout,
-  Card,
   ConfirmDialog,
   EmptyState,
   ErrorMessage,
@@ -24,12 +24,7 @@ import {
   Spinner,
   StatusBadge,
   Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  cn,
   toast,
   type MenuItemDef,
 } from "../components/ui";
@@ -156,7 +151,7 @@ export function WatchPage() {
             </div>
           ) : watches.length === 0 ? (
             <EmptyState
-              art={<Arch className="w-24" />}
+              art={<Aqueduct className="w-64" />}
               title="No watch folders yet"
               description={
                 <>
@@ -172,24 +167,11 @@ export function WatchPage() {
               }
             />
           ) : (
-            <Card padded={false} className="overflow-hidden">
-              <Table className="[&_td]:align-top">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Watch folder</TableHead>
-                    <TableHead>State</TableHead>
-                    <TableHead>Last run</TableHead>
-                    <TableHead>On</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {watches.map((w) => (
-                    <WatchRow key={w.rule.id} status={w} paused={paused} now={now} onEdit={() => setEditing(w.rule)} />
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
+            <div className="flex flex-col gap-4">
+              {watches.map((w) => (
+                <WatchCard key={w.rule.id} status={w} paused={paused} now={now} onEdit={() => setEditing(w.rule)} />
+              ))}
+            </div>
           )}
         </div>
       </PageBody>
@@ -198,7 +180,7 @@ export function WatchPage() {
   );
 }
 
-function WatchRow({ status, paused, now, onEdit }: { status: WatchStatus; paused: boolean; now: number; onEdit: () => void }) {
+function WatchCard({ status, paused, now, onEdit }: { status: WatchStatus; paused: boolean; now: number; onEdit: () => void }) {
   const { rule } = status;
   const runNow = useWatchStore((s) => s.runNow);
   const stopRule = useWatchStore((s) => s.stop);
@@ -245,56 +227,31 @@ function WatchRow({ status, paused, now, onEdit }: { status: WatchStatus; paused
 
   return (
     <>
-      <TableRow>
-        {/* Takes the room left. Names and paths wrap, breaking long path segments anywhere, so they never
-            push the other columns out of the table. */}
-        <TableCell className="w-full">
-          <div className="min-w-[200px] whitespace-normal">
-            <div className="flex items-start gap-2">
-              <span className="min-w-0 font-medium [word-break:normal] wrap-anywhere">{rule.name}</span>
-              <Badge size="sm" className="mt-0.5">
-                {actionLabel(rule.action)}
-              </Badge>
+      {/* A rule as the two places it keeps in step. Its arch says how the last run ended (whole after a good one,
+          grey and broken after a failed one) and builds while a run is under way. */}
+      <article data-watch className={cn("rounded-2xl bg-card text-card-foreground shadow-card ring-1 ring-border transition-opacity", !rule.enabled && "opacity-70")}>
+        <div className="flex items-start gap-5 px-6 pt-5">
+          <Arch className="mt-0.5 w-14" {...(job ? jobProgress(job) : lastRunArch(status))} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="min-w-0 truncate font-display text-lg leading-7 font-semibold tracking-tight" title={rule.name}>
+                {rule.name}
+              </h3>
+              <Badge size="sm">{actionLabel(rule.action)}</Badge>
             </div>
-            <div className="selectable mt-0.5 font-mono text-xs text-muted-foreground [word-break:normal] wrap-anywhere">
-              {rule.source}
-              <ArrowRight className="mx-1 inline size-3 align-[-2px]" aria-label="to" />
-              {rule.destination}
-            </div>
-            {/* When it runs sits here rather than in a column of its own: the fixed columns already take
-                most of a 1180 px window, and a sixth pushed the table into scrolling sideways. */}
-            <ul className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground" aria-label="Runs">
+            <ul className="mt-0.5 flex flex-wrap gap-x-3 text-sm text-muted-foreground" aria-label="Runs">
               {triggerPhrases(rule).map((p) => (
                 <li key={p}>{p}</li>
               ))}
             </ul>
           </div>
-        </TableCell>
-
-        <TableCell>
-          <div className="w-[180px] whitespace-normal">
-            <StateCell status={status} paused={paused} job={job} now={now} />
-          </div>
-        </TableCell>
-
-        <TableCell>
-          <div className="w-[170px] whitespace-normal">
-            <LastRunCell status={status} now={now} />
-          </div>
-        </TableCell>
-
-        <TableCell>
-          {/* The switch sits level with the first line of the row's other cells. */}
-          <span className="flex h-5 items-center" title={rule.enabled ? "On: turn off to stop watching" : "Off: turn on to start watching"}>
-            <Switch checked={rule.enabled} disabled={toggling} onChange={toggle} />
-          </span>
-        </TableCell>
-
-        <TableCell>
-          <div className="flex items-center justify-end gap-1">
+          <div className="flex shrink-0 items-center gap-1">
+            <span className="mr-2 flex items-center" title={rule.enabled ? "On: turn off to stop watching" : "Off: turn on to start watching"}>
+              <Switch checked={rule.enabled} disabled={toggling} onChange={toggle} />
+            </span>
             {running ? (
               <IconButton label={job?.stopRequested ? "Stopping…" : "Stop"} size="sm" disabled={job?.stopRequested} onClick={stop}>
-                <Square />
+                <CircleStop />
               </IconButton>
             ) : (
               <IconButton label="Run now" size="sm" onClick={() => void runNow(rule.id).catch(fail(`Could not run “${rule.name}”`))}>
@@ -307,8 +264,19 @@ function WatchRow({ status, paused, now, onEdit }: { status: WatchStatus; paused
               </IconButton>
             </Menu>
           </div>
-        </TableCell>
-      </TableRow>
+        </div>
+        <Span className="mx-6 mt-4" source={rule.source} destination={rule.destination} {...(job ? jobProgress(job) : { value: 0, indeterminate: false, ...lastRunArch(status) })} />
+        <div className="mt-4 grid grid-cols-2 divide-x border-t">
+          <div className="min-w-0 px-6 py-3">
+            <div className="mb-1 text-xs text-muted-foreground">Now</div>
+            <StateCell status={status} paused={paused} job={job} now={now} />
+          </div>
+          <div className="min-w-0 px-6 py-3">
+            <div className="mb-1 text-xs text-muted-foreground">Last run</div>
+            <LastRunCell status={status} now={now} />
+          </div>
+        </div>
+      </article>
 
       {history && <WatchHistoryDialog rule={rule} onClose={() => setHistory(false)} />}
       <ConfirmDialog
@@ -328,6 +296,14 @@ function WatchRow({ status, paused, now, onEdit }: { status: WatchStatus; paused
       />
     </>
   );
+}
+
+/** The arch of a rule that is not running: whole after a good last run, broken after a failed one, grey after a
+ *  stopped one, and not built yet before the first. */
+function lastRunArch({ lastRun }: WatchStatus): Partial<ReturnType<typeof jobProgress>> {
+  if (!lastRun) return {};
+  if (lastRun.status === "success") return { value: 100 };
+  return { value: 100, ended: lastRun.status === "error" ? "broken" : "drained" };
 }
 
 /** What the rule is doing now, with the detail that goes with it (a countdown, progress, what went wrong). */

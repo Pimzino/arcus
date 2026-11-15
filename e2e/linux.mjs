@@ -465,7 +465,7 @@ try {
     throw new Error(`${e.message}; the editor says: ${(await textOf(dialog)).slice(0, 600)}`);
   });
   const ruleRow = () =>
-    run(`return [...document.querySelectorAll("main tbody tr")].map((r) => r.innerText).find((t) => t.includes(arguments[0])) ?? null;`, WATCH_NAME);
+    run(`return [...document.querySelectorAll("main [data-watch]")].map((r) => r.innerText).find((t) => t.includes(arguments[0])) ?? null;`, WATCH_NAME);
   const watching = await waitFor("the rule to be listed and watching its folder", async () => {
     const text = await ruleRow();
     return text?.includes("Watching") ? text : null;

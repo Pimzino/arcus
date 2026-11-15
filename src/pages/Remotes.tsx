@@ -1,10 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Cloud, FolderOpen, Info, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { FolderOpen, Info, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import {
   Badge,
   Button,
-  Card,
   ConfirmDialog,
   Dialog,
   EmptyState,
@@ -18,15 +17,10 @@ import {
   ProgressBar,
   SearchInput,
   Spinner,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
   cn,
   toast,
 } from "../components/ui";
+import { Aqueduct } from "../components/app/Arch";
 import { Seal } from "../components/app/Seal";
 import { formatBytes, percent } from "../lib/format";
 import { useInvalidate, useProviders, useRemotes, type RemoteInfo } from "../lib/hooks";
@@ -95,7 +89,7 @@ export function RemotesPage() {
         {remotes.error && <ErrorMessage error={remotes.error} className="mb-6" />}
         {remotes.data?.length === 0 && (
           <EmptyState
-            icon={<Cloud />}
+            art={<Aqueduct className="w-64" />}
             title="No remotes yet"
             description="Add a remote to connect a cloud drive, an S3 bucket, an SFTP server… anything rclone supports."
             action={
@@ -108,42 +102,40 @@ export function RemotesPage() {
         {all.length > 0 && list.length === 0 && (
           <EmptyState icon={<Search />} title="No matches" description={`No remote matches “${search.trim()}”. Try a different name or type.`} />
         )}
-        {(remotes.isLoading || list.length > 0) && (
-          <Card padded={false} className="overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Usage</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {remotes.isLoading ? (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={4}>
-                      <div className="flex justify-center py-8">
-                        <Spinner className="size-5" />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  list.map((r) => (
-                    <RemoteRow
-                      key={r.name}
-                      remote={r}
-                      typeLabel={providerLabel(r.type)}
-                      onBrowse={() => openInExplorer({ fs: `${r.name}:`, path: "" })}
-                      onEdit={() => setWizard({ mode: "edit", remote: r })}
-                      onDelete={() => setDeleting(r)}
-                      onQuota={() => setAbout(r)}
-                    />
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </Card>
+        {remotes.isLoading && (
+          <div className="flex justify-center py-16">
+            <Spinner className="size-5" />
+          </div>
+        )}
+        {list.length > 0 && (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
+            {list.map((r) => (
+              <RemoteCard
+                key={r.name}
+                remote={r}
+                typeLabel={providerLabel(r.type)}
+                onBrowse={() => openInExplorer({ fs: `${r.name}:`, path: "" })}
+                onEdit={() => setWizard({ mode: "edit", remote: r })}
+                onDelete={() => setDeleting(r)}
+                onQuota={() => setAbout(r)}
+              />
+            ))}
+            {!query && (
+              <button
+                type="button"
+                onClick={() => setWizard({ mode: "create" })}
+                className="no-ring group flex min-h-52 flex-col items-start justify-between rounded-2xl p-5 text-left ring-1 ring-border transition-[background-color,box-shadow] ring-inset hover:bg-card hover:shadow-card focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <span className="flex size-12 items-center justify-center rounded-xl bg-muted text-muted-foreground transition-colors group-hover:text-primary-ink [&_svg]:size-5">
+                  <Plus />
+                </span>
+                <span>
+                  <span className="block font-display text-lg leading-7 font-semibold tracking-tight">Add a remote</span>
+                  <span className="block text-sm text-muted-foreground">A cloud drive, a bucket, a server: anything rclone can reach</span>
+                </span>
+              </button>
+            )}
+          </div>
         )}
       </PageBody>
 
@@ -175,7 +167,11 @@ export function RemotesPage() {
   );
 }
 
-function RemoteRow({
+/**
+ * A remote as a place: its backend's seal, its name and what it is, how full it is once that has been asked, and
+ * the ways in. Its name opens it in the explorer.
+ */
+function RemoteCard({
   remote,
   typeLabel,
   onBrowse,
@@ -191,70 +187,74 @@ function RemoteRow({
   onQuota: () => void;
 }) {
   return (
-    <TableRow>
-      <TableCell>
-        <div className="flex items-center gap-3">
-          <Seal type={remote.type} />
-          <div className="min-w-0">
-            <button type="button" className="no-ring block max-w-full truncate rounded-sm text-left font-medium transition-colors hover:text-primary-ink focus-visible:ring-3 focus-visible:ring-ring/50" onClick={onBrowse}>
-              {remote.name}
-            </button>
-            <div className="truncate text-xs text-muted-foreground">{typeLabel}</div>
-          </div>
-        </div>
-      </TableCell>
-      <TableCell className="font-mono text-xs leading-5 text-muted-foreground">{remote.type}</TableCell>
-      <TableCell>
-        <UsageCell name={remote.name} />
-      </TableCell>
-      <TableCell className="text-right">
-        <div className="flex items-center justify-end gap-1">
-          <IconButton size="sm" label={`Browse ${remote.name}:`} onClick={onBrowse}>
-            <FolderOpen />
+    <article data-remote className="flex min-h-52 min-w-0 flex-col rounded-2xl bg-card p-5 text-card-foreground shadow-card ring-1 ring-border">
+      <div className="flex items-start justify-between gap-3">
+        <Seal type={remote.type} className="size-12 rounded-xl text-sm" />
+        <Menu align="end" items={[{ label: "Storage usage…", icon: <Info />, onSelect: onQuota }]}>
+          <IconButton size="sm" label={`More actions for ${remote.name}:`} className="-mt-1 -mr-1">
+            <MoreHorizontal />
           </IconButton>
-          <IconButton size="sm" label={`Edit ${remote.name}:`} onClick={onEdit}>
-            <Pencil />
-          </IconButton>
-          <IconButton size="sm" label={`Delete ${remote.name}:`} onClick={onDelete}>
-            <Trash2 />
-          </IconButton>
-          <Menu align="end" items={[{ label: "Storage usage…", icon: <Info />, onSelect: onQuota }]}>
-            <IconButton size="sm" label={`More actions for ${remote.name}:`}>
-              <MoreHorizontal />
-            </IconButton>
-          </Menu>
-        </div>
-      </TableCell>
-    </TableRow>
+        </Menu>
+      </div>
+      <button
+        type="button"
+        className="no-ring mt-4 block max-w-full truncate rounded-sm text-left font-display text-lg leading-7 font-semibold tracking-tight transition-colors hover:text-primary-ink focus-visible:ring-3 focus-visible:ring-ring/50"
+        onClick={onBrowse}
+      >
+        {remote.name}
+      </button>
+      <div className="truncate text-sm text-muted-foreground" title={`${typeLabel} (${remote.type})`}>
+        {typeLabel}
+      </div>
+      <div className="mt-auto pt-5">
+        <Usage name={remote.name} onQuota={onQuota} />
+      </div>
+      <div className="mt-4 flex items-center gap-1 border-t pt-3">
+        <Button size="sm" variant="ghost" icon={<FolderOpen />} onClick={onBrowse} className="-ml-2 mr-auto" aria-label={`Browse ${remote.name}:`}>
+          Browse
+        </Button>
+        <IconButton size="sm" label={`Edit ${remote.name}:`} onClick={onEdit}>
+          <Pencil />
+        </IconButton>
+        <IconButton size="sm" label={`Delete ${remote.name}:`} onClick={onDelete}>
+          <Trash2 />
+        </IconButton>
+      </div>
+    </article>
   );
 }
 
 /**
- * Usage is only shown once the app already knows it: the "Storage usage" action caches
+ * How full a remote is, shown only once the app already knows it: the "Storage usage" action caches
  * operations/about under ["about", fs]. This observer is disabled so the listing never calls
  * operations/about by itself — some OAuth remotes hand out single-use refresh tokens, and one
  * automatic call per remote would invalidate the token the user's other machines rely on.
  */
-function UsageCell({ name }: { name: string }) {
+function Usage({ name, onQuota }: { name: string; onQuota: () => void }) {
   const fs = `${name}:`;
   const about: AboutInfo | undefined = useQuery({ queryKey: ["about", fs], queryFn: () => rc.about(fs), enabled: false }).data;
 
-  if (!about) return <span className="text-faint-foreground">–</span>;
+  if (!about)
+    return (
+      <button type="button" onClick={onQuota} className="no-ring rounded-sm text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
+        How full is it?
+      </button>
+    );
   const used = about.used ?? 0;
   const total = about.total ?? 0;
-  if (total <= 0) return <span className="tnum text-muted-foreground">{formatBytes(used)} used</span>;
+  if (total <= 0) return <span className="tnum text-xs text-muted-foreground">{formatBytes(used)} used</span>;
 
   const share = Math.round(percent(used, total));
   return (
-    <div className="w-60 text-xs">
-      <div className="flex items-center justify-between gap-4">
-        <span className="tnum text-muted-foreground">
+    <div className="text-xs">
+      {/* Storage in use is a level, not a transfer: one neutral span, red once the remote is nearly full. */}
+      <ProgressBar value={share} tone={share >= 85 ? "danger" : "neutral"} />
+      <div className="tnum mt-2 flex justify-between gap-4 text-muted-foreground">
+        <span>
           {formatBytes(used)} of {formatBytes(total)}
         </span>
-        <span className="tnum text-muted-foreground">{share}%</span>
+        <span>{share}%</span>
       </div>
-      {/* Storage in use is a level, not a transfer: one neutral bar, red once the remote is nearly full. */}
-      <ProgressBar className="mt-2" size="sm" value={share} tone={share >= 85 ? "danger" : "neutral"} />
     </div>
   );
 }

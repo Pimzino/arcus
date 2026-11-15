@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, FolderOpen, HardDrive, Plus, RefreshCw, Unplug } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronUp, FolderOpen, HardDrive, Plus, RefreshCw, Unplug } from "lucide-react";
 import { useState } from "react";
+import { Aqueduct } from "../components/app/Arch";
+import { Seal } from "../components/app/Seal";
 import { useFileManager } from "../components/app/FileManager";
 import { LocationField } from "../components/app/Location";
 import { Button, Callout, Card, Checkbox, Dialog, EmptyState, ErrorMessage, Field, Input, PageBody, PageHeader, Select, Textarea, cn, toast } from "../components/ui";
 import { formatDateTime } from "../lib/format";
-import { useInvalidate } from "../lib/hooks";
+import { useInvalidate, useRemotes } from "../lib/hooks";
 import { openExternal, pickFolder } from "../lib/native";
 import { fsString, parseLocation, remoteName, type Location } from "../lib/paths";
 import { rc } from "../lib/rc";
@@ -71,7 +73,7 @@ export function MountsPage() {
           {mounts.error && <ErrorMessage error={mounts.error} />}
           {mounts.data?.length === 0 && (
             <EmptyState
-              icon={<HardDrive />}
+              art={<Aqueduct arches={2} className="w-48" />}
               title="No active mounts"
               description="Mount a remote to browse it with Finder, Explorer or any other app."
               action={
@@ -82,7 +84,7 @@ export function MountsPage() {
             />
           )}
           {(mounts.data?.length ?? 0) > 0 && (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
+            <div className="flex flex-col gap-4">
               {mounts.data!.map((m) => (
                 <MountCard key={m.MountPoint} mount={m} onUnmount={() => unmount(m.MountPoint)} />
               ))}
@@ -105,41 +107,40 @@ export function MountsPage() {
   );
 }
 
+/**
+ * A mount as the two places it joins: the remote under its seal, and the folder on this computer where it appears.
+ */
 function MountCard({ mount, onUnmount }: { mount: MountPoint; onUnmount: () => void }) {
   const fm = useFileManager();
+  const name = remoteName(parseLocation(mount.Fs));
+  const remote = useRemotes().data?.find((r) => r.name === name);
   return (
-    <Card
-      className={cardHeaderRule}
-      bodyClassName="flex-1"
-      title={remoteName(parseLocation(mount.Fs)) ?? mount.Fs}
-      footer={
-        /* Unmount keeps the room the card's one action had; showing the mount is the quieter one beside it.
-           Neither button can shrink, so in a card as narrow as the grid allows they wrap instead of overflowing. */
-        <div className="flex w-full flex-wrap items-center gap-2">
-          <Button variant="outline" icon={<FolderOpen />} onClick={() => fm.open(mount.MountPoint)}>
-            {fm.openLabel}
-          </Button>
-          <Button variant="destructive" className="flex-1" icon={<Unplug />} onClick={onUnmount}>
-            Unmount
-          </Button>
+    <article data-mount className="flex items-center gap-5 rounded-2xl bg-card px-6 py-5 text-card-foreground shadow-card ring-1 ring-border">
+      {remote ? (
+        <Seal type={remote.type} className="size-11 rounded-xl" />
+      ) : (
+        <span aria-hidden className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground [&_svg]:size-5">
+          <HardDrive />
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <h3 className="truncate font-display text-lg leading-7 font-semibold tracking-tight">{name ?? mount.Fs}</h3>
+        <div className="selectable mt-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 font-mono text-xs text-muted-foreground" title={`${mount.Fs} → ${mount.MountPoint}`}>
+          <span className="truncate">{mount.Fs}</span>
+          <ArrowRight aria-label="appears at" className="size-3.5 shrink-0" />
+          <span className="truncate text-foreground">{mount.MountPoint}</span>
         </div>
-      }
-    >
-      <dl className="space-y-4">
-        <MountFact label="Source" value={mount.Fs} mono />
-        <MountFact label="Mount point" value={mount.MountPoint} mono />
-        <MountFact label="Mounted on" value={formatDateTime(mount.MountedOn)} />
-      </dl>
-    </Card>
-  );
-}
-
-function MountFact({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="space-y-1">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className={cn("selectable text-sm wrap-anywhere", mono ? "font-mono" : "tnum")}>{value}</dd>
-    </div>
+        <div className="tnum mt-1 text-xs text-muted-foreground">Mounted {formatDateTime(mount.MountedOn)}</div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Button variant="outline" icon={<FolderOpen />} onClick={() => fm.open(mount.MountPoint)}>
+          {fm.openLabel}
+        </Button>
+        <Button variant="ghost" className="text-destructive hover:text-destructive" icon={<Unplug />} onClick={onUnmount}>
+          Unmount
+        </Button>
+      </div>
+    </article>
   );
 }
 

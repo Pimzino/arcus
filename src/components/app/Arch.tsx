@@ -100,3 +100,36 @@ export function Arch({
     </div>
   );
 }
+
+/**
+ * The drawing of a place where nothing has been carried yet: an aqueduct of `arches` unbuilt arches in the mark's
+ * own geometry, standing pier against pier (each pier as thick as two) under one deck resting on their keystones.
+ * Drawn in the text colour, faint.
+ */
+export function Aqueduct({ arches = 3, className }: { arches?: number; className?: string }) {
+  const mask = useId();
+  const step = 2 * OUTER; // the arches' rings meet only at the foot, so no arch's joints cut into the next
+  const width = step * arches;
+  const shift = (a: number) => `translate(${a * step} 0)`;
+  return (
+    <svg data-aqueduct viewBox={`0 -10 ${width} 70`} fill="none" aria-hidden className={cn("text-foreground", className)}>
+      <mask id={mask} maskUnits="userSpaceOnUse" x="0" y="-10" width={width} height="70">
+        <rect x="0" y="-10" width={width} height="70" fill="#fff" />
+        {Array.from({ length: arches }, (_, a) =>
+          JOINTS.map((angle) => <path key={`${a}-${angle}`} transform={shift(a)} d={`M${point(INNER - 1, angle)}L${point(OUTER + PROUD + 1, angle)}`} stroke="#000" strokeWidth={JOINT} />),
+        )}
+      </mask>
+      {/* One group at one opacity, so where two arches' stones touch they are not drawn darker than the rest. */}
+      <g mask={`url(#${mask})`} stroke="currentColor" opacity={0.2}>
+        {Array.from({ length: arches }, (_, a) => (
+          <g key={a} transform={shift(a)}>
+            {STONES.map((stone, i) => (
+              <path key={i} d={stone.d} strokeWidth={stone.width} />
+            ))}
+          </g>
+        ))}
+      </g>
+      <rect x="0" y="-6" width={width} height="5" rx="1" fill="currentColor" opacity={0.2} />
+    </svg>
+  );
+}

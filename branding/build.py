@@ -25,7 +25,6 @@ import subprocess
 from pathlib import Path
 
 import skia
-from fontTools import subset
 from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
@@ -361,21 +360,6 @@ def write_vectors() -> None:
     write_svg("favicon.svg", size, size, fav, "Arcus favicon.")
 
 
-def write_web_font() -> None:
-    """Sora SemiBold for the app's large headings (page, section and dialog titles), cut down to the Latin
-    characters those titles use. Everything else in the app stays in the system font."""
-    font = TTFont(HERE / "fonts" / "Sora[wght].ttf")
-    instantiateVariableFont(font, {"wght": WORD_WEIGHT}, inplace=True)
-    options = subset.Options()
-    options.layout_features = ["kern", "liga", "calt", "tnum"]
-    options.name_IDs = ["*"]  # keep the copyright and licence records
-    sub = subset.Subsetter(options)
-    sub.populate(unicodes=[*range(0x20, 0x7F), *range(0xA0, 0x180), 0x2013, 0x2014, 0x2018, 0x2019, 0x201C,
-                           0x201D, 0x2026, 0x2022, 0x2192, 0x2190, 0x2212, 0x20AC])
-    sub.subset(font)
-    font.save(HERE / "fonts" / "Sora-SemiBold-latin.ttf")
-
-
 def write_platform_icons() -> None:
     """Every size macOS, Windows and Linux need, from app-icon.png, into icons/. `tauri icon` also makes Android and iOS
     sets and a 64 px PNG; this app ships neither, so they go."""
@@ -553,7 +537,6 @@ if __name__ == "__main__":
         raise SystemExit(0)
     render_app_icon()
     write_vectors()
-    write_web_font()
     write_react()
     render_sheet()
     write_platform_icons()

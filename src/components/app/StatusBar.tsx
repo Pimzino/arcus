@@ -1,18 +1,17 @@
-// The window's bottom bar: what rclone is doing right now (daemon, address, pid),
-// the combined progress of the transfers the UI is running, and which Arcus this
-// is (with a newer one, once known), in the style of an editor status bar. Its
-// height is --statusbar-height in index.css.
+// The window's bottom bar, on the wall under the page: what rclone is doing right now (daemon, address, pid),
+// transfers that need attention, and which Arcus this is (with a newer one, once known), in the style of an
+// editor status bar. What is running shows in the sidebar's dock. Its height is --statusbar-height in index.css.
 
-import { AlertTriangle, ArrowLeftRight, ArrowUpCircle, Cpu, Download, FileText, Loader2, Play, Plug, Power, RotateCcw, Settings2 } from "lucide-react";
+import { AlertTriangle, ArrowUpCircle, Cpu, Download, FileText, Play, Plug, Power, RotateCcw, Settings2 } from "lucide-react";
 import { useMemo, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { formatBytes, formatDateTime, formatEta, formatSpeed, pluralize } from "../../lib/format";
+import { formatDateTime, pluralize } from "../../lib/format";
 import { copyToClipboard } from "../../lib/native";
 import { api } from "../../lib/tauri";
 import { errorMessage } from "../../lib/types";
 import { useAppStore } from "../../store/app";
-import { transferSummary, useJobsStore, type TransferSummary } from "../../store/jobs";
+import { transferSummary, useJobsStore } from "../../store/jobs";
 import { selectUpdateAvailable, useUpdatesStore } from "../../store/updates";
-import { Menu, ProgressBar, StatusDot, Tooltip, cn, toast, type MenuItemDef, type Tone } from "../ui";
+import { Menu, StatusDot, Tooltip, cn, toast, type MenuItemDef, type Tone } from "../ui";
 import { LogViewerDialog } from "./LogViewer";
 
 export function StatusBar() {
@@ -73,7 +72,7 @@ export function StatusBar() {
       .catch((e) => toast({ tone: "danger", title: `Could not copy the ${what.toLowerCase()}`, description: errorMessage(e) }));
 
   return (
-    <footer className="flex h-[var(--statusbar-height)] shrink-0 items-stretch gap-0.5 border-t bg-sidebar px-1.5 text-xs text-muted-foreground">
+    <footer className="-mt-1 flex h-[var(--statusbar-height)] shrink-0 items-stretch gap-0.5 px-2 pb-1 text-xs text-muted-foreground">
       <Menu items={daemonMenu} align="start" minWidth={230}>
         <StatusItem tooltip={detail}>
           <StatusDot tone={tone} pulse={daemon.state === "starting"} />
@@ -97,23 +96,6 @@ export function StatusBar() {
         <StatusItem tone="danger" aria-label={attention} tooltip={attention} onClick={() => setPage("transfers")}>
           <AlertTriangle />
           <span className="tnum">{transfers.attention}</span>
-        </StatusItem>
-      )}
-      {transfers.running > 0 ? (
-        <StatusItem tooltip={<TransferDetail transfers={transfers} />} onClick={() => setPage("transfers")}>
-          <Loader2 className="animate-spin text-primary-ink" />
-          <span>{pluralize(transfers.running, "transfer")}</span>
-          <span className="block w-14">
-            <ProgressBar size="sm" value={transfers.percent ?? 0} indeterminate={transfers.percent == null} />
-          </span>
-          {transfers.percent != null && <span className="tnum">{Math.round(transfers.percent)}%</span>}
-          <span className="tnum">{formatSpeed(transfers.speed)}</span>
-          {transfers.eta != null && <span className="tnum">{formatEta(transfers.eta)} left</span>}
-        </StatusItem>
-      ) : (
-        <StatusItem tooltip="Copy, sync, move and check jobs" onClick={() => setPage("transfers")}>
-          <ArrowLeftRight />
-          <span>No transfers</span>
         </StatusItem>
       )}
       {update && (
@@ -163,25 +145,5 @@ function StatusItem({
     </Tooltip>
   ) : (
     cell
-  );
-}
-
-/** Tooltip for the transfers cell: which jobs are running, and totals the cell leaves out. */
-function TransferDetail({ transfers }: { transfers: TransferSummary }) {
-  const shown = transfers.names.slice(0, 4);
-  return (
-    <span className="flex flex-col gap-0.5">
-      {shown.map((name, i) => (
-        <span key={i} className="truncate">
-          {name}
-        </span>
-      ))}
-      {transfers.names.length > shown.length && <span>and {transfers.names.length - shown.length} more</span>}
-      <span className="opacity-75">
-        {formatBytes(transfers.bytes)}
-        {transfers.totalBytes > 0 && ` of ${formatBytes(transfers.totalBytes)}`}
-        {transfers.errors > 0 && ` · ${pluralize(transfers.errors, "error")}`}
-      </span>
-    </span>
   );
 }

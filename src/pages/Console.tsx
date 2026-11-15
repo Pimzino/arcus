@@ -82,8 +82,9 @@ export function ConsolePage() {
           />
         }
       />
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div ref={outputRef} className="selectable min-h-0 flex-1 overflow-auto overscroll-none border-b bg-terminal px-6 py-4 font-mono text-xs leading-5 text-terminal-fg">
+      {/* The console is one dark instrument in both themes: what has been run above, the prompt at its foot. */}
+      <div data-theme="dark" className="flex min-h-0 flex-1 flex-col bg-terminal text-terminal-fg">
+        <div ref={outputRef} className="selectable min-h-0 flex-1 overflow-auto overscroll-none px-8 py-5 font-mono text-xs leading-5">
           {lines.length === 0 && (
             <div className="text-terminal-fg/60">Output appears here. Commands run with the daemon's rclone binary and config file; long-running commands stream as they go.</div>
           )}
@@ -93,7 +94,7 @@ export function ConsolePage() {
             </div>
           ))}
         </div>
-        <div className="shrink-0 px-6 py-4">
+        <div className="shrink-0 border-t bg-background/40 px-8 py-4">
           {tab === "command" ? (
             <CommandForm
               disabled={!running}
@@ -110,7 +111,7 @@ export function ConsolePage() {
             <div className="flex flex-wrap gap-1.5">
               {tab === "command" &&
                 EXAMPLES.map((ex) => (
-                  <Button key={ex} size="xs" variant="outline" className="font-mono" onClick={() => setExample(`${ex}​${Date.now()}`)}>
+                  <Button key={ex} size="xs" variant="ghost" className="font-mono text-muted-foreground" onClick={() => setExample(`${ex}​${Date.now()}`)}>
                     {ex}
                   </Button>
                 ))}
@@ -171,14 +172,14 @@ function CommandForm({
 
   return (
     <div className="flex items-center gap-2">
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-      <span className="shrink-0 font-mono text-sm text-muted-foreground">rclone</span>
+      <ChevronRight className="size-4 shrink-0 text-terminal-command" />
+      <span className="shrink-0 font-mono text-sm text-terminal-command">rclone</span>
       <Input
         mono
         className="flex-1"
         value={line}
         disabled={disabled}
-        placeholder={disabled ? "rclone is not running" : "lsd remote:   ·   copy src: dst: --dry-run   ·   any rclone command"}
+        placeholder={disabled ? "rclone is not running" : "any rclone command, such as lsd remote:"}
         onChange={(e) => setLine(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !busy) void run();

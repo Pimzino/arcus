@@ -11,6 +11,7 @@ import {
   FolderOpen,
   FolderPlus,
   FolderSearch,
+  HardDrive,
   Info,
   Link,
   MoreHorizontal,
@@ -24,6 +25,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { flushSync } from "react-dom";
 import { LocationBar } from "../components/app/Location";
 import { Places } from "../components/app/Places";
+import { Seal } from "../components/app/Seal";
 import { FileIcon } from "../components/app/FileIcon";
 import { useFileManager } from "../components/app/FileManager";
 import { blankForm, TransferDialog, type TransferForm } from "../components/app/TransferDialog";
@@ -49,7 +51,7 @@ import {
   type MenuItemDef,
 } from "../components/ui";
 import { formatBytes, formatDateTime, pluralize } from "../lib/format";
-import { useRemotes } from "../lib/hooks";
+import { useProviders, useRemotes } from "../lib/hooks";
 import { refreshListings } from "../lib/listings";
 import { copyToClipboard } from "../lib/native";
 import { breadcrumbs, childLocation, escapeGlob, formatLocation, fsString, isLocal, parentLocation, remoteName, sameLocation, type Location } from "../lib/paths";
@@ -223,6 +225,8 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
   const qc = useQueryClient();
   const ctx = useContextMenu();
   const remotes = useRemotes();
+  const remote = remotes.data?.find((r) => `${r.name}:` === loc.fs);
+  const providers = useProviders();
   const fm = useFileManager();
 
   // The scrolling grid, in state so that the rows can follow its scrolling once it has mounted.
@@ -670,8 +674,30 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
     >
       {/* The pane that takes the keys is the one whose head stands a step above the listing, under a rule of the accent. */}
       <div className={cn("shrink-0 transition-[background-color,box-shadow]", isActive ? "bg-card shadow-[inset_0_2px_0_var(--primary)]" : "bg-background")}>
-        <LocationBar value={loc} onChange={navigate} onRefresh={refresh} loading={listing.isFetching} editSignal={editSignal} />
-        <div className="flex h-9 items-center gap-1 border-b border-border px-2">
+        {/* The place this pane shows, named large under its seal, with what can be done here beside it. */}
+        <div data-place-head className="flex h-16 items-center gap-3 px-4">
+          {loc.fs ? (
+            <>
+              {remote ? (
+                <Seal type={remote.type} className="size-9" />
+              ) : (
+                <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4">
+                  <HardDrive />
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate font-display text-lg leading-6 font-semibold tracking-tight" title={formatLocation(loc)}>
+                  {breadcrumbs(loc).slice(-1)[0].label.replace(/:$/, "")}
+                </h2>
+                <div className="truncate text-xs text-muted-foreground">
+                  {remote ? (providers.data?.find((p) => p.Name === remote.type || p.Aliases?.includes(remote.type))?.Description ?? remote.type) : "On this computer"}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 text-sm text-muted-foreground">Nothing open</div>
+          )}
+          <div className="flex shrink-0 items-center gap-0.5">
           <IconButton label="New folder" size="sm" disabled={!loc.fs || busy} onClick={() => setDialog({ type: "mkdir" })}>
             <FolderPlus />
           </IconButton>
@@ -687,8 +713,10 @@ function Pane({ index, style, className }: { index: 0 | 1; style?: CSSProperties
               <MoreHorizontal />
             </IconButton>
           </Menu>
-          {busy && <Spinner className="mr-1 ml-auto size-3.5 text-muted-foreground" />}
+          </div>
+          {busy && <Spinner className="size-3.5 text-muted-foreground" />}
         </div>
+        <LocationBar value={loc} onChange={navigate} onRefresh={refresh} loading={listing.isFetching} editSignal={editSignal} />
       </div>
 
       {/* overscroll-none: WebKit otherwise lets a fling run past either end of the list and spring back, taking the sticky header with it. */}
