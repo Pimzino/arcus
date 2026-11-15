@@ -16,6 +16,7 @@ import {
   Menu,
   PageBody,
   PageHeader,
+  SearchInput,
   StatusBadge,
   Table,
   TableBody,
@@ -63,6 +64,7 @@ export function TransfersPage() {
   const running = useDaemonRunning();
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -75,16 +77,22 @@ export function TransfersPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // The search matches a job's name, both places, its status and its error, in any case; the tabs count what it found.
+  const query = search.trim().toLowerCase();
+  const found = useMemo(
+    () => (query ? jobs.filter((j) => [j.title, j.source, j.destination, STATUS[j.status].label, j.error ?? ""].some((t) => t.toLowerCase().includes(query))) : jobs),
+    [jobs, query],
+  );
   const counts = useMemo(
     () => ({
-      all: jobs.length,
-      running: jobs.filter((j) => j.status === "running").length,
-      done: jobs.filter((j) => j.status === "success").length,
-      failed: jobs.filter((j) => j.status === "error" || j.status === "stopped" || j.status === "lost").length,
+      all: found.length,
+      running: found.filter((j) => j.status === "running").length,
+      done: found.filter((j) => j.status === "success").length,
+      failed: found.filter((j) => j.status === "error" || j.status === "stopped" || j.status === "lost").length,
     }),
-    [jobs],
+    [found],
   );
-  const visible = jobs.filter((j) =>
+  const visible = found.filter((j) =>
     filter === "all" ? true : filter === "running" ? j.status === "running" : filter === "done" ? j.status === "success" : j.status !== "running" && j.status !== "success",
   );
 
@@ -95,7 +103,8 @@ export function TransfersPage() {
         description="Copy, sync, move, bisync and check jobs run by rclone"
         actions={
           <>
-            <Button size="lg" onClick={clearFinished} disabled={counts.all === counts.running}>
+            <SearchInput value={search} onValueChange={setSearch} aria-label="Search transfers" placeholder="Search transfers" className="w-56" />
+            <Button size="lg" onClick={clearFinished} disabled={jobs.every((j) => j.status === "running")}>
               Clear finished
             </Button>
             <Button size="lg" variant="default" icon={<Plus />} onClick={() => setCreating(true)} disabled={!running}>
@@ -122,12 +131,24 @@ export function TransfersPage() {
             <EmptyState
               {...(jobs.length === 0 ? { art: <Aqueduct className="w-64" /> } : { icon: <ArrowLeftRight /> })}
               title={jobs.length === 0 ? "No transfers yet" : "Nothing here"}
-              description={jobs.length === 0 ? "Start one here, or select files in the explorer and copy them to the other pane." : "No jobs match this filter."}
+              description={
+                jobs.length === 0
+                  ? "Start one here, or select files in the explorer and copy them to the other pane."
+                  : query
+                    ? `No jobs match “${search.trim()}”${filter === "all" ? "" : " under this tab"}.`
+                    : "No jobs match this filter."
+              }
               action={
-                jobs.length === 0 && (
+                jobs.length === 0 ? (
                   <Button variant="outline" icon={<Plus />} onClick={() => setCreating(true)} disabled={!running}>
                     New transfer
                   </Button>
+                ) : (
+                  query && (
+                    <Button variant="outline" onClick={() => setSearch("")}>
+                      Clear search
+                    </Button>
+                  )
                 )
               }
             />

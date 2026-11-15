@@ -9,7 +9,8 @@
 //   - the left edge and width of every cell of every row, across a sweep of speeds and ETAs and the running
 //     job finishing: there must be exactly one layout;
 //   - no speed, ETA or progress text cut off;
-//   - the buttons of each row, and the items of the More menu of a running and a finished job.
+//   - the buttons of each row, and the items of the More menu of a running and a finished job;
+//   - the search box: by name, path, status and error, any case, with the tabs counting what it found.
 //
 // It runs the UI in browser dev mode (Vite with the dev shim, no rclone needed) with jobs put straight into the
 // jobs store, inside an off-screen WKWebView (e2e/webkit-probe.swift, compiled with swiftc).
@@ -158,6 +159,29 @@ await closeMenu();
 return JSON.stringify({ items, noLogItems: noLog });`,
     ],
     [
+      "5-search",
+      `${HELPERS}
+${JOBS}
+await sleep(300);
+const box = document.querySelector('input[aria-label="Search transfers"]');
+if (!box) throw new Error("no search box on the Transfers page");
+const titles = () => $$("tbody tr").map((tr) => tr.children[1].textContent.match(/Copy Season 4 rushes|Sync backups|Move exports/)?.[0] ?? "?");
+const tabs = () => $$("[role=tab]").map((t) => t.textContent.replace(/\\s+/g, " ").trim());
+const type = async (text) => {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(box, text);
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+  await sleep(150);
+};
+const out = {};
+for (const q of ["season 4", "GDRIVE:", "permission denied", "finished", "/users/me", "no such job"]) {
+  await type(q);
+  out[q] = { titles: titles(), tabs: tabs(), empty: document.querySelector("main")?.innerText.includes("No jobs match") ?? false };
+}
+await type("");
+out.cleared = { titles: titles() };
+return JSON.stringify(out);`,
+    ],
+    [
       "4-running-finishes",
       `${HELPERS}
 await closeMenu();
@@ -197,6 +221,19 @@ function evaluate(results) {
     check("a finished job's menu starts with Run again and View log", JSON.stringify(finished.items.slice(0, 2)) === JSON.stringify(["Run again", "View log"]), finished.items);
     check("a finished job's menu has no Details (the row's button opens them)", !finished.items.includes("Details"), finished.items);
     check("a job without a log has no View log", !finished.noLogItems.includes("View log") && finished.noLogItems[0] === "Run again", finished.noLogItems);
+  }
+  const search = r["5-search"];
+  if (search && !search.error) {
+    const t = (q) => JSON.stringify(search[q]?.titles);
+    check("search by name finds the job", t("season 4") === JSON.stringify(["Copy Season 4 rushes"]), search["season 4"]);
+    check("search by destination, any case", t("GDRIVE:") === JSON.stringify(["Move exports"]), search["GDRIVE:"]);
+    check("search by error text", t("permission denied") === JSON.stringify(["Move exports"]), search["permission denied"]);
+    check("search by status", t("finished") === JSON.stringify(["Sync backups"]), search["finished"]);
+    check("search by source path; the tabs count what it found", t("/users/me") === JSON.stringify(["Sync backups", "Move exports"]) && /^All\s*2$/.test(search["/users/me"].tabs[0]), search["/users/me"]);
+    check("no match says so", search["no such job"].titles.length === 0 && search["no such job"].empty, search["no such job"]);
+    check("clearing the search shows every job again", search.cleared.titles.length === 3, search.cleared);
+  } else if (search) {
+    check("5-search: ran", false, search.error);
   }
   const done = r["4-running-finishes"];
   if (done && !done.error) {
