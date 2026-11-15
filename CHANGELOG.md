@@ -2,6 +2,17 @@
 
 Every release of Arcus, newest first, with the commits it added since the release before it.
 
+## v0.10.0 (2026-11-15)
+
+- The app wears the brand: two places and a span between them, drawn on every screen ([6285008](https://github.com/Pimzino/arcus/commit/6285008753e3ef10693fe199b41a487cfd8d234c))
+- The window is a wall and each page a sheet laid on it, with the arch built stone by stone wherever work happens ([ed1a2fd](https://github.com/Pimzino/arcus/commit/ed1a2fd0d3f4d4d4a7b6ce300d6edb4e1a345b48))
+- Arcus quits cleanly on SIGTERM, SIGINT and SIGHUP instead of leaving its rclone running ([c7375c8](https://github.com/Pimzino/arcus/commit/c7375c81885bf529104c37025129cec3fe344110))
+- Rust code formatted with rustfmt at 120 columns, and CI checks it ([2c3457c](https://github.com/Pimzino/arcus/commit/2c3457c20bcb4d23d48f482df45948cd7c687eeb))
+- Settings: default transfers, checkers and bandwidth for every transfer; data and logs move to Arcus folders ([4cbc073](https://github.com/Pimzino/arcus/commit/4cbc073f6d0955afc162ea9a723c44efba5e88f7))
+- Transfers: search jobs by name, path, status or error ([ce28093](https://github.com/Pimzino/arcus/commit/ce28093ac84452b160cd88778088750eebb08c95))
+
+All changes: [v0.9.1...v0.10.0](https://github.com/Pimzino/arcus/compare/v0.9.1...v0.10.0)
+
 ## v0.9.1 (2026-10-02)
 
 - The status bar shows the Arcus version and a newer one, in place of the sidebar's update button ([80874b4](https://github.com/Pimzino/arcus/commit/80874b421da4bf2d2307ea965a027d4e1d5570f3))
