@@ -97,7 +97,10 @@ pub struct TransferModel {
 impl MenuModel {
     /// What decides whether the menu can be updated in place or has to be built again.
     fn shape(&self) -> (Vec<(String, usize)>, bool) {
-        (self.transfers.iter().map(|t| (t.id.clone(), t.lines.len())).collect(), self.update.is_some())
+        (
+            self.transfers.iter().map(|t| (t.id.clone(), t.lines.len())).collect(),
+            self.update.is_some(),
+        )
     }
 }
 
@@ -216,7 +219,11 @@ pub fn model(rows: &[TransferRow], update: Option<&str>) -> MenuModel {
                 }
             }
         };
-        transfers.push(TransferModel { id: row.id.clone(), label, lines });
+        transfers.push(TransferModel {
+            id: row.id.clone(),
+            label,
+            lines,
+        });
     }
     let overall = percent(bytes, total);
     let (header, tooltip, title) = if rows.is_empty() {
@@ -251,20 +258,31 @@ pub async fn transfer_rows(app: &AppHandle) -> Vec<TransferRow> {
     let (state, watch_jobs) = (&state, &watch_jobs);
     let reads = daemons.into_iter().map(|info| async move {
         let (title, route) = match watch_jobs.iter().find(|j| j.daemon_id == info.id) {
-            Some(job) => (format!("Watch: {}", job.watch_name), Some(format!("{} → {}", job.source, job.destination))),
+            Some(job) => (
+                format!("Watch: {}", job.watch_name),
+                Some(format!("{} → {}", job.source, job.destination)),
+            ),
             None => (info.label.clone(), info.route.clone()),
         };
         let stats = match state.transfer_daemons.client(&info.id).await {
             Ok(client) => read_stats(&client).await,
             Err(_) => None,
         };
-        TransferRow { id: info.id, title, route, stats }
+        TransferRow {
+            id: info.id,
+            title,
+            route,
+            stats,
+        }
     });
     futures_util::future::join_all(reads).await
 }
 
 async fn read_stats(client: &RcClient) -> Option<Stats> {
-    let value = tokio::time::timeout(Duration::from_secs(2), client.call("core/stats", &json!({}))).await.ok()?.ok()?;
+    let value = tokio::time::timeout(Duration::from_secs(2), client.call("core/stats", &json!({})))
+        .await
+        .ok()?
+        .ok()?;
     serde_json::from_value(value).ok()
 }
 
@@ -272,7 +290,12 @@ async fn read_stats(client: &RcClient) -> Option<Stats> {
 /// records why; any other transfer's rclone job is stopped, and the window sees it end as stopped.
 async fn stop_transfer(app: &AppHandle, id: &str) {
     let state = app.state::<AppState>();
-    if let Some(job) = state.watch.jobs().into_iter().find(|j| j.daemon_id == id && j.status == "running") {
+    if let Some(job) = state
+        .watch
+        .jobs()
+        .into_iter()
+        .find(|j| j.daemon_id == id && j.status == "running")
+    {
         if let Err(err) = state.watch.stop(&job.watch_id) {
             log::warn!("could not stop watch folder {} from the tray: {err}", job.watch_id);
         }
@@ -282,7 +305,11 @@ async fn stop_transfer(app: &AppHandle, id: &str) {
         return;
     };
     let running = match client.call("job/list", &json!({})).await {
-        Ok(list) => list.get("runningIds").and_then(|ids| ids.as_array()).cloned().unwrap_or_default(),
+        Ok(list) => list
+            .get("runningIds")
+            .and_then(|ids| ids.as_array())
+            .cloned()
+            .unwrap_or_default(),
         Err(err) => {
             log::warn!("could not list the jobs of transfer {id}: {err}");
             return;
@@ -329,7 +356,8 @@ pub struct TrayState {
 }
 
 pub fn available(app: &AppHandle) -> bool {
-    app.try_state::<TrayState>().is_some_and(|s| s.available.load(Ordering::SeqCst))
+    app.try_state::<TrayState>()
+        .is_some_and(|s| s.available.load(Ordering::SeqCst))
 }
 
 /// Once, from `setup`: the tray's menu events arrive in `on_menu_event`. Registered once for the life of
@@ -412,7 +440,11 @@ fn build(app: &AppHandle) -> Result<Tray, String> {
         .on_tray_icon_event(|tray, event| {
             let app = tray.app_handle();
             match event {
-                TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } if !cfg!(target_os = "macos") => {
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } if !cfg!(target_os = "macos") => {
                     crate::background::show_main_window(app);
                 }
                 // The pointer is on its way to the menu: have the numbers fresh by the time it opens.
@@ -422,7 +454,15 @@ fn build(app: &AppHandle) -> Result<Tray, String> {
         })
         .build(app)
         .map_err(|e| e.to_string())?;
-    Ok(Tray { icon, status, pause, update, transfers, shown, retired: Vec::new() })
+    Ok(Tray {
+        icon,
+        status,
+        pause,
+        update,
+        transfers,
+        shown,
+        retired: Vec::new(),
+    })
 }
 
 type Built = (
@@ -451,7 +491,13 @@ fn build_menu(app: &AppHandle, m: &MenuModel) -> tauri::Result<Built> {
             .iter()
             .map(|line| MenuItem::new(app, line, false, None::<&str>))
             .collect::<tauri::Result<Vec<_>>>()?;
-        let show = MenuItem::with_id(app, format!("{MENU_TRANSFER}{}:show", t.id), "Show in Arcus", true, None::<&str>)?;
+        let show = MenuItem::with_id(
+            app,
+            format!("{MENU_TRANSFER}{}:show", t.id),
+            "Show in Arcus",
+            true,
+            None::<&str>,
+        )?;
         let stop = MenuItem::with_id(app, format!("{MENU_TRANSFER}{}:stop", t.id), "Stop", true, None::<&str>)?;
         let submenu = Submenu::new(app, &t.label, true)?;
         for line in &lines {
@@ -501,7 +547,11 @@ async fn refresh_loop(app: AppHandle, generation: u64) {
         }
         // Idle, a round only looks for new transfers, which costs no rclone call.
         let running = update(&app).await;
-        let attending = state.attention_until.lock().unwrap().is_some_and(|u| u > Instant::now());
+        let attending = state
+            .attention_until
+            .lock()
+            .unwrap()
+            .is_some_and(|u| u > Instant::now());
         let pace = match (running, attending) {
             (true, true) => PACE_ATTENTION,
             (true, false) => PACE_RUNNING,

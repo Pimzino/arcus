@@ -24,7 +24,9 @@ const POLL_FAILURES_MAX: u32 = 10;
 /// The log file level for a run: `default` follows Settings → Transfers & logs.
 pub fn log_level(rule: &WatchRule, settings: &Settings) -> Option<String> {
     match rule.log.as_str() {
-        "default" => settings.log_transfers_by_default.then(|| settings.transfer_log_level.clone()),
+        "default" => settings
+            .log_transfers_by_default
+            .then(|| settings.transfer_log_level.clone()),
         "off" => None,
         level => Some(level.to_string()),
     }
@@ -54,7 +56,9 @@ pub fn job_title(rule: &WatchRule, resync: bool) -> String {
 /// own is left as written.
 fn ordered_filter(filter: &mut serde_json::Map<String, Value>) {
     let strings = |v: Option<&Value>| -> Vec<String> {
-        v.and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default()
+        v.and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
+            .unwrap_or_default()
     };
     let includes = strings(filter.get("IncludeRule"));
     let excludes = strings(filter.get("ExcludeRule"));
@@ -196,7 +200,13 @@ fn count(n: u64, one: &str) -> String {
 
 /// The "Arcus summary" block, in the same words as `summaryText` in `src/store/jobs.ts`, so a watch
 /// folder's log reads like any other transfer's.
-fn summary_text(job: &WatchJob, stats: Option<&Value>, status: &str, error: Option<&str>, counts: Option<&ActivityCounts>) -> String {
+fn summary_text(
+    job: &WatchJob,
+    stats: Option<&Value>,
+    status: &str,
+    error: Option<&str>,
+    counts: Option<&ActivityCounts>,
+) -> String {
     let mut lines = vec![
         format!("Job: {}", job.title),
         format!("Operation: {}", job.rc_path),
@@ -205,7 +215,10 @@ fn summary_text(job: &WatchJob, stats: Option<&Value>, status: &str, error: Opti
     if !job.destination.is_empty() {
         lines.push(format!("Destination: {}", job.destination));
     }
-    lines.push(format!("Result: {status}{}", error.map(|e| format!(" — {e}")).unwrap_or_default()));
+    lines.push(format!(
+        "Result: {status}{}",
+        error.map(|e| format!(" — {e}")).unwrap_or_default()
+    ));
     if stats.is_some() {
         lines.push(format!(
             "Transferred: {} in {} file(s); {} checked, {} deleted, {} error(s)",
@@ -235,7 +248,11 @@ fn summary_text(job: &WatchJob, stats: Option<&Value>, status: &str, error: Opti
             lines.push(format!("Also: {}", also.join(", ")));
         }
     }
-    if let Some(last) = stats.and_then(|s| s.get("lastError")).and_then(Value::as_str).filter(|e| !e.is_empty()) {
+    if let Some(last) = stats
+        .and_then(|s| s.get("lastError"))
+        .and_then(Value::as_str)
+        .filter(|e| !e.is_empty())
+    {
         lines.push(format!("Last error: {last}"));
     }
     lines.push(format!("Finished: {}", iso_time(now_ms())));
@@ -251,7 +268,11 @@ struct Outcome {
 
 impl Outcome {
     fn error(message: impl Into<String>) -> Self {
-        Self { status: "error", error: Some(message.into()), stats: None }
+        Self {
+            status: "error",
+            error: Some(message.into()),
+            stats: None,
+        }
     }
 }
 
@@ -265,7 +286,10 @@ pub async fn execute(host: HostRef, rule: WatchRule, mut run: WatchRun) {
     // watched source would run again after every run. A watch folder's copy is meant to be a copy of
     // its own anyway. A value the user set in Settings → rclone wins.
     if rule.on_change && is_local(&rule.source) && is_local(&rule.destination) {
-        settings.extra_daemon_env.entry("RCLONE_LOCAL_NO_CLONE".into()).or_insert_with(|| "true".into());
+        settings
+            .extra_daemon_env
+            .entry("RCLONE_LOCAL_NO_CLONE".into())
+            .or_insert_with(|| "true".into());
     }
     let level = log_level(&rule, &settings);
     let label = format!("Watch: {}", rule.name);
@@ -278,7 +302,14 @@ pub async fn execute(host: HostRef, rule: WatchRule, mut run: WatchRun) {
     let binary = match host.binary() {
         Ok(binary) => binary,
         Err(AppError::NotInstalled) => {
-            return conclude(&host, &rule, &mut run, None, Outcome::error("rclone is not installed yet"), None);
+            return conclude(
+                &host,
+                &rule,
+                &mut run,
+                None,
+                Outcome::error("rclone is not installed yet"),
+                None,
+            );
         }
         Err(e) => return conclude(&host, &rule, &mut run, None, Outcome::error(e.to_string()), None),
     };
@@ -293,7 +324,11 @@ pub async fn execute(host: HostRef, rule: WatchRule, mut run: WatchRun) {
             host.emit(ACTIVITY_EVENT, serde_json::to_value(&batch).unwrap_or(Value::Null));
         })
     };
-    let info = match host.daemons().start(host.paths(), &settings, &binary, &label, level.as_deref(), sink).await {
+    let info = match host
+        .daemons()
+        .start(host.paths(), &settings, &binary, &label, level.as_deref(), sink)
+        .await
+    {
         Ok(info) => info,
         Err(e) => {
             let message = format!("rclone did not start: {e}");
@@ -329,7 +364,13 @@ pub async fn execute(host: HostRef, rule: WatchRule, mut run: WatchRun) {
     };
 
     let outcome = drive(&host, &rule, &mut run, &mut job, &params).await;
-    let summary = summary_text(&job, outcome.stats.as_ref(), outcome.status, outcome.error.as_deref(), counts.lock().unwrap().as_ref());
+    let summary = summary_text(
+        &job,
+        outcome.stats.as_ref(),
+        outcome.status,
+        outcome.error.as_deref(),
+        counts.lock().unwrap().as_ref(),
+    );
     let stopped = match host.daemons().stop(&info.id, Some(summary.clone())).await {
         Ok(stopped) => stopped,
         Err(e) => {
@@ -348,7 +389,14 @@ pub async fn execute(host: HostRef, rule: WatchRule, mut run: WatchRun) {
     if resync && outcome.status == "success" && !dry_run(&rule) {
         engine.set_bisync_baseline(&rule, bisync_key(&rule));
     }
-    conclude(&host, &rule, &mut run, (job.jobid != 0).then_some(job), outcome, Some(summary));
+    conclude(
+        &host,
+        &rule,
+        &mut run,
+        (job.jobid != 0).then_some(job),
+        outcome,
+        Some(summary),
+    );
 }
 
 /// Submit the job and follow it to its end.
@@ -357,7 +405,13 @@ async fn drive(host: &HostRef, rule: &WatchRule, run: &mut WatchRun, job: &mut W
     let daemon_id = job.daemon_id.clone();
     let client: RcClient = match host.daemons().client(&daemon_id).await {
         Ok(client) => client,
-        Err(e) => return Outcome { status: "lost", error: Some(e.to_string()), stats: None },
+        Err(e) => {
+            return Outcome {
+                status: "lost",
+                error: Some(e.to_string()),
+                stats: None,
+            }
+        }
     };
     host.daemons().job_starting(&daemon_id).await;
     if let Some(rate) = &rule.bwlimit {
@@ -366,7 +420,11 @@ async fn drive(host: &HostRef, rule: &WatchRule, run: &mut WatchRun, job: &mut W
         }
     }
     if engine.stop_requested(&rule.id, &run.id) {
-        return Outcome { status: "stopped", error: None, stats: None };
+        return Outcome {
+            status: "stopped",
+            error: None,
+            stats: None,
+        };
     }
     let submitted = match client.call(&job.rc_path, params).await {
         Ok(result) => result,
@@ -398,12 +456,20 @@ async fn drive(host: &HostRef, rule: &WatchRule, run: &mut WatchRun, job: &mut W
                 failures = 0;
                 if status.get("finished").and_then(Value::as_bool) == Some(true) {
                     let success = status.get("success").and_then(Value::as_bool) == Some(true);
-                    let mut error = status.get("error").and_then(Value::as_str).map(str::trim).filter(|e| !e.is_empty()).map(str::to_string);
+                    let mut error = status
+                        .get("error")
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .filter(|e| !e.is_empty())
+                        .map(str::to_string);
                     // A check whose job ran fine but found differences says so in its output, not as a
                     // job error: `{ success: false, status: "1 differences found", differ: [...] }`.
                     let output = status.get("output");
                     if success && output.and_then(|o| o.get("success")).and_then(Value::as_bool) == Some(false) {
-                        let found = output.and_then(|o| o.get("status")).and_then(Value::as_str).unwrap_or("the check found differences");
+                        let found = output
+                            .and_then(|o| o.get("status"))
+                            .and_then(Value::as_str)
+                            .unwrap_or("the check found differences");
                         error = Some(found.to_string());
                         break (false, error);
                     }
@@ -416,27 +482,45 @@ async fn drive(host: &HostRef, rule: &WatchRule, run: &mut WatchRun, job: &mut W
                     log::warn!("watch job {jobid} on {daemon_id} is gone: {e}");
                     return Outcome {
                         status: "lost",
-                        error: Some("The rclone process running this transfer stopped unexpectedly, so its result is unknown.".into()),
+                        error: Some(
+                            "The rclone process running this transfer stopped unexpectedly, so its result is unknown."
+                                .into(),
+                        ),
                         stats: None,
                     };
                 }
             }
         }
     };
-    let stats = client.call("core/stats", &json!({ "group": format!("job/{jobid}") })).await.ok();
-    let stopped = stop_sent || engine.stop_requested(&rule.id, &run.id) || error.as_deref().is_some_and(|e| e.contains("context canceled"));
+    let stats = client
+        .call("core/stats", &json!({ "group": format!("job/{jobid}") }))
+        .await
+        .ok();
+    let stopped = stop_sent
+        || engine.stop_requested(&rule.id, &run.id)
+        || error.as_deref().is_some_and(|e| e.contains("context canceled"));
     let (status, error) = if success {
         ("success", None)
     } else if stopped {
         ("stopped", None)
     } else {
-        ("error", Some(error.unwrap_or_else(|| "rclone reported a failure without saying why.".into())))
+        (
+            "error",
+            Some(error.unwrap_or_else(|| "rclone reported a failure without saying why.".into())),
+        )
     };
     Outcome { status, error, stats }
 }
 
 /// Record the finished run, tell the UI, and email about it if the rule asks for that.
-fn conclude(host: &HostRef, rule: &WatchRule, run: &mut WatchRun, job: Option<WatchJob>, outcome: Outcome, summary: Option<String>) {
+fn conclude(
+    host: &HostRef,
+    rule: &WatchRule,
+    run: &mut WatchRun,
+    job: Option<WatchJob>,
+    outcome: Outcome,
+    summary: Option<String>,
+) {
     let engine = host.engine();
     let stats = outcome.stats.as_ref();
     run.status = outcome.status.to_string();
@@ -468,7 +552,11 @@ fn conclude(host: &HostRef, rule: &WatchRule, run: &mut WatchRun, job: Option<Wa
         status: run.status.clone(),
         error: run.error.clone(),
         summary: summary.unwrap_or_else(|| {
-            format!("Result: {}{}", run.status, run.error.as_deref().map(|e| format!(" — {e}")).unwrap_or_default())
+            format!(
+                "Result: {}{}",
+                run.status,
+                run.error.as_deref().map(|e| format!(" — {e}")).unwrap_or_default()
+            )
         }),
         log_path: run.log_path.clone(),
         origin: format!("Watch folder “{}”", rule.name),

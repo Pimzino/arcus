@@ -206,7 +206,11 @@ pub fn show_main_window(app: &AppHandle) {
 fn set_dock_visible(app: &AppHandle, visible: bool) {
     #[cfg(target_os = "macos")]
     {
-        let policy = if visible { tauri::ActivationPolicy::Regular } else { tauri::ActivationPolicy::Accessory };
+        let policy = if visible {
+            tauri::ActivationPolicy::Regular
+        } else {
+            tauri::ActivationPolicy::Accessory
+        };
         if let Err(err) = app.set_activation_policy(policy) {
             log::warn!("could not change the activation policy: {err}");
         }
@@ -216,7 +220,9 @@ fn set_dock_visible(app: &AppHandle, visible: bool) {
 }
 
 fn main_window_visible(app: &AppHandle) -> bool {
-    app.get_webview_window(MAIN_WINDOW).and_then(|w| w.is_visible().ok()).unwrap_or(false)
+    app.get_webview_window(MAIN_WINDOW)
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(false)
 }
 
 /// Linux: the tray goes through libappindicator, which Tauri loads at run time and aborts the whole app
@@ -272,7 +278,11 @@ fn sync_launch_at_login(app: &AppHandle, force: bool) {
         log::warn!("launch at login: cannot tell where this user's login items live");
         return;
     };
-    let result = if enabled { login::register(&target) } else { login::unregister(&target) };
+    let result = if enabled {
+        login::register(&target)
+    } else {
+        login::unregister(&target)
+    };
     match result {
         Ok(()) => *applied = Some(enabled),
         Err(err) => log::warn!("launch at login: {err}"),
@@ -287,7 +297,11 @@ fn login_target(app: &AppHandle) -> Option<login::Target> {
     let config_dir = app.path().config_dir().ok().unwrap_or_else(|| home.join(".config"));
     // An AppImage runs from a temporary mount; `$APPIMAGE` is the file the user actually has.
     let appimage = std::env::var_os("APPIMAGE").map(PathBuf::from).filter(|p| p.is_file());
-    Some(login::Target { program: appimage.unwrap_or(exe), home, config_dir })
+    Some(login::Target {
+        program: appimage.unwrap_or(exe),
+        home,
+        config_dir,
+    })
 }
 
 /// The per-OS login entries, written as plain files (macOS, Linux) or a registry value (Windows).
@@ -345,13 +359,18 @@ pub(crate) mod login {
                 // A copy run from where macOS quarantined it (App Translocation) lives at a random
                 // path that is gone after the next restart; an entry pointing there would do nothing.
                 if target.program.to_string_lossy().contains("/AppTranslocation/") {
-                    return Err("Arcus is running from a temporary location macOS made for it; move Arcus to \
+                    return Err(
+                        "Arcus is running from a temporary location macOS made for it; move Arcus to \
                                 Applications and open it from there to have it open at login"
-                        .into());
+                            .into(),
+                    );
                 }
                 write_file(&mac_plist_path(&target.home), mac_plist(&target.program).as_bytes())
             }
-            Os::Linux => write_file(&linux_entry_path(&target.config_dir), linux_entry(&target.program).as_bytes()),
+            Os::Linux => write_file(
+                &linux_entry_path(&target.config_dir),
+                linux_entry(&target.program).as_bytes(),
+            ),
             Os::Windows => windows::set(&windows_command(&target.program)),
         }
     }
@@ -385,7 +404,9 @@ pub(crate) mod login {
     }
 
     pub fn mac_plist_path(home: &Path) -> PathBuf {
-        home.join("Library").join("LaunchAgents").join(format!("{MAC_LABEL}.plist"))
+        home.join("Library")
+            .join("LaunchAgents")
+            .join(format!("{MAC_LABEL}.plist"))
     }
 
     /// A LaunchAgent that starts the app once when the user logs in to the desktop (Aqua). No KeepAlive:
@@ -477,7 +498,10 @@ pub(crate) mod login {
 
         fn reg(args: &[&str]) -> Result<std::process::Output, String> {
             let mut cmd = Command::new("reg.exe");
-            cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+            cmd.args(args)
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
             // No console window flashing up from a GUI app.
             #[cfg(windows)]
             std::os::windows::process::CommandExt::creation_flags(&mut cmd, crate::rclone::provision::CREATE_NO_WINDOW);
@@ -485,11 +509,24 @@ pub(crate) mod login {
         }
 
         pub fn set(command: &str) -> Result<(), String> {
-            let out = reg(&["add", WINDOWS_RUN_KEY, "/v", WINDOWS_VALUE, "/t", "REG_SZ", "/d", command, "/f"])?;
+            let out = reg(&[
+                "add",
+                WINDOWS_RUN_KEY,
+                "/v",
+                WINDOWS_VALUE,
+                "/t",
+                "REG_SZ",
+                "/d",
+                command,
+                "/f",
+            ])?;
             if out.status.success() {
                 Ok(())
             } else {
-                Err(format!("reg add failed: {}", String::from_utf8_lossy(&out.stderr).trim()))
+                Err(format!(
+                    "reg add failed: {}",
+                    String::from_utf8_lossy(&out.stderr).trim()
+                ))
             }
         }
 
@@ -501,7 +538,10 @@ pub(crate) mod login {
             if out.status.success() {
                 Ok(())
             } else {
-                Err(format!("reg delete failed: {}", String::from_utf8_lossy(&out.stderr).trim()))
+                Err(format!(
+                    "reg delete failed: {}",
+                    String::from_utf8_lossy(&out.stderr).trim()
+                ))
             }
         }
 
@@ -564,12 +604,23 @@ pub(crate) mod login {
             let config_dir = home.join(".config");
             std::fs::create_dir_all(&home).unwrap();
             let real_home = std::env::var_os("HOME").map(PathBuf::from);
-            assert!(real_home.as_deref().is_none_or(|h| !home.starts_with(h)), "(10) must not be under the real home");
+            assert!(
+                real_home.as_deref().is_none_or(|h| !home.starts_with(h)),
+                "(10) must not be under the real home"
+            );
 
             let awkward = PathBuf::from("/Applications/Arcus & Co <beta>/it's \"odd\" $HOME `x` 100%\\b/Arcus");
             let moved = PathBuf::from("/Users/someone/Downloads/Arcus.app/Contents/MacOS/arcus");
-            let target = Target { program: awkward.clone(), home: home.clone(), config_dir: config_dir.clone() };
-            let moved_target = Target { program: moved.clone(), home: home.clone(), config_dir: config_dir.clone() };
+            let target = Target {
+                program: awkward.clone(),
+                home: home.clone(),
+                config_dir: config_dir.clone(),
+            };
+            let moved_target = Target {
+                program: moved.clone(),
+                home: home.clone(),
+                config_dir: config_dir.clone(),
+            };
             let mut checks = Vec::new();
             let mut check = |name: &str, ok: bool, observed: serde_json::Value| {
                 println!("{} {name}: {observed}", if ok { "ok  " } else { "FAIL" });
@@ -582,37 +633,93 @@ pub(crate) mod login {
                     _ => linux_entry_path(&config_dir),
                 };
                 let tag = format!("{os:?}");
-                check(&format!("{tag}: not registered before"), !is_registered_for(os, &target), json!(path));
-                check(&format!("{tag}: unregister with nothing there is fine (7)"), unregister_for(os, &target).is_ok(), json!(null));
+                check(
+                    &format!("{tag}: not registered before"),
+                    !is_registered_for(os, &target),
+                    json!(path),
+                );
+                check(
+                    &format!("{tag}: unregister with nothing there is fine (7)"),
+                    unregister_for(os, &target).is_ok(),
+                    json!(null),
+                );
                 let written = register_for(os, &target);
-                check(&format!("{tag}: register creates missing folders (2)"), written.is_ok() && path.is_file(), json!(written));
-                check(&format!("{tag}: registered after writing (3)"), is_registered_for(os, &target), json!(null));
-                check(&format!("{tag}: another copy is not registered (4)"), !is_registered_for(os, &moved_target), json!(moved));
+                check(
+                    &format!("{tag}: register creates missing folders (2)"),
+                    written.is_ok() && path.is_file(),
+                    json!(written),
+                );
+                check(
+                    &format!("{tag}: registered after writing (3)"),
+                    is_registered_for(os, &target),
+                    json!(null),
+                );
+                check(
+                    &format!("{tag}: another copy is not registered (4)"),
+                    !is_registered_for(os, &moved_target),
+                    json!(moved),
+                );
                 let text = std::fs::read_to_string(&path).unwrap();
-                std::fs::write(out.join(format!("{tag}-awkward-path.{}", if os == Os::Mac { "plist" } else { "desktop" })), &text).unwrap();
+                std::fs::write(
+                    out.join(format!(
+                        "{tag}-awkward-path.{}",
+                        if os == Os::Mac { "plist" } else { "desktop" }
+                    )),
+                    &text,
+                )
+                .unwrap();
                 register_for(os, &moved_target).unwrap();
-                check(&format!("{tag}: re-register replaces the old path (5)"),
-                      is_registered_for(os, &moved_target) && !is_registered_for(os, &target), json!(null));
-                std::fs::write(out.join(format!("{tag}-moved.{}", if os == Os::Mac { "plist" } else { "desktop" })),
-                               std::fs::read_to_string(&path).unwrap()).unwrap();
-                check(&format!("{tag}: unregister removes it"), unregister_for(os, &target).is_ok() && !path.exists(), json!(null));
+                check(
+                    &format!("{tag}: re-register replaces the old path (5)"),
+                    is_registered_for(os, &moved_target) && !is_registered_for(os, &target),
+                    json!(null),
+                );
+                std::fs::write(
+                    out.join(format!(
+                        "{tag}-moved.{}",
+                        if os == Os::Mac { "plist" } else { "desktop" }
+                    )),
+                    std::fs::read_to_string(&path).unwrap(),
+                )
+                .unwrap();
+                check(
+                    &format!("{tag}: unregister removes it"),
+                    unregister_for(os, &target).is_ok() && !path.exists(),
+                    json!(null),
+                );
             }
 
             // (1) and (8), macOS: plutil must accept the plist and read the path back unchanged.
             register_for(Os::Mac, &target).unwrap();
             let plist = mac_plist_path(&home);
             if cfg!(target_os = "macos") {
-                let lint = std::process::Command::new("plutil").arg("-lint").arg(&plist).output().unwrap();
-                check("Mac: plutil -lint accepts the plist (8)", lint.status.success(),
-                      json!(String::from_utf8_lossy(&lint.stdout).trim()));
+                let lint = std::process::Command::new("plutil")
+                    .arg("-lint")
+                    .arg(&plist)
+                    .output()
+                    .unwrap();
+                check(
+                    "Mac: plutil -lint accepts the plist (8)",
+                    lint.status.success(),
+                    json!(String::from_utf8_lossy(&lint.stdout).trim()),
+                );
                 let json_out = std::process::Command::new("plutil")
-                    .args(["-convert", "json", "-o", "-"]).arg(&plist).output().unwrap();
+                    .args(["-convert", "json", "-o", "-"])
+                    .arg(&plist)
+                    .output()
+                    .unwrap();
                 let parsed: serde_json::Value = serde_json::from_slice(&json_out.stdout).unwrap_or(json!(null));
                 let args = parsed["ProgramArguments"].clone();
-                check("Mac: the program path survives XML escaping (1)",
-                      args == json!([awkward.to_string_lossy(), BACKGROUND_ARG]), args);
-                check("Mac: RunAtLoad and label (8)",
-                      parsed["RunAtLoad"] == json!(true) && parsed["Label"] == json!(MAC_LABEL), parsed.clone());
+                check(
+                    "Mac: the program path survives XML escaping (1)",
+                    args == json!([awkward.to_string_lossy(), BACKGROUND_ARG]),
+                    args,
+                );
+                check(
+                    "Mac: RunAtLoad and label (8)",
+                    parsed["RunAtLoad"] == json!(true) && parsed["Label"] == json!(MAC_LABEL),
+                    parsed.clone(),
+                );
             }
 
             // (1) Linux: undo the Exec escaping the way the spec says a launcher does, and compare.
@@ -627,30 +734,45 @@ pub(crate) mod login {
                 arg.push(if c == '\\' { chars.next().unwrap() } else { c });
             }
             let arg = arg.replace("%%", "%");
-            check("Linux: Exec argument decodes back to the path (1)", arg == awkward.to_string_lossy(),
-                  json!({ "exec": exec, "decoded": arg }));
+            check(
+                "Linux: Exec argument decodes back to the path (1)",
+                arg == awkward.to_string_lossy(),
+                json!({ "exec": exec, "decoded": arg }),
+            );
 
             // (6) A user's own arcus.desktop without our marker survives turning the option off.
             let user_file = linux_entry_path(&config_dir);
-            std::fs::write(&user_file, "[Desktop Entry]\nType=Application\nName=Mine\nExec=/usr/bin/true\n").unwrap();
+            std::fs::write(
+                &user_file,
+                "[Desktop Entry]\nType=Application\nName=Mine\nExec=/usr/bin/true\n",
+            )
+            .unwrap();
             unregister_for(Os::Linux, &target).unwrap();
-            check("Linux: a file that is not ours is left alone (6)", user_file.is_file(), json!(user_file));
+            check(
+                "Linux: a file that is not ours is left alone (6)",
+                user_file.is_file(),
+                json!(user_file),
+            );
 
             // (9) reg.exe's listing, with the spaces a Program Files path has.
             let listing = "\r\nHKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\r\n    Arcus    REG_SZ    \"C:\\Program Files\\Arcus\\Arcus.exe\" --background\r\n\r\n";
             let parsed = windows::parse_query(listing);
             let expected = windows_command(Path::new(r"C:\Program Files\Arcus\Arcus.exe"));
-            check("Windows: reg query listing parses to the command (9)", parsed.as_deref() == Some(expected.as_str()),
-                  json!({ "parsed": parsed, "expected": expected }));
+            check(
+                "Windows: reg query listing parses to the command (9)",
+                parsed.as_deref() == Some(expected.as_str()),
+                json!({ "parsed": parsed, "expected": expected }),
+            );
 
             let passed = checks.iter().all(|c| c["ok"] == json!(true));
-            std::fs::write(out.join("report.json"),
-                           serde_json::to_string_pretty(&json!({ "passed": passed, "home": home, "checks": checks })).unwrap())
-                .unwrap();
+            std::fs::write(
+                out.join("report.json"),
+                serde_json::to_string_pretty(&json!({ "passed": passed, "home": home, "checks": checks })).unwrap(),
+            )
+            .unwrap();
             let _ = std::fs::remove_dir_all(&root);
             println!("artifacts: {}", out.display());
             assert!(passed, "see {}", out.join("report.json").display());
         }
     }
 }
-

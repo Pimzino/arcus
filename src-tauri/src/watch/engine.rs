@@ -63,7 +63,10 @@ pub trait Host: Send + Sync + 'static {
 pub type HostRef = Arc<dyn Host>;
 
 pub fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// A timer that will start a run.
@@ -254,7 +257,12 @@ impl EventFilter {
             return true;
         }
         event.paths.iter().any(|path| {
-            let root = self.roots.iter().find(|r| path.starts_with(r)).map(PathBuf::as_path).unwrap_or(Path::new(""));
+            let root = self
+                .roots
+                .iter()
+                .find(|r| path.starts_with(r))
+                .map(PathBuf::as_path)
+                .unwrap_or(Path::new(""));
             if excluded(path, root, &self.patterns) {
                 return false;
             }
@@ -334,7 +342,10 @@ impl WatchEngine {
                 let mut rt = RuleRt::new(rule, gen);
                 if rt.rule.enabled {
                     if rt.rule.run_on_start {
-                        rt.pending = Some(Pending { at_ms: now + START_DELAY.as_millis() as u64, trigger: "start" });
+                        rt.pending = Some(Pending {
+                            at_ms: now + START_DELAY.as_millis() as u64,
+                            trigger: "start",
+                        });
                     }
                     // An interval counts from the last run, so a slot missed while Arcus was closed runs
                     // once, soon; without a last run it counts from now.
@@ -355,7 +366,14 @@ impl WatchEngine {
         self.persist(&host);
         tauri::async_runtime::spawn(Self::event_loop(host.clone(), rx));
         tauri::async_runtime::spawn(Self::tick_loop(host.clone()));
-        let ids: Vec<String> = self.inner.lock().unwrap().rules.iter().map(|r| r.rule.id.clone()).collect();
+        let ids: Vec<String> = self
+            .inner
+            .lock()
+            .unwrap()
+            .rules
+            .iter()
+            .map(|r| r.rule.id.clone())
+            .collect();
         for id in ids {
             self.attach(&host, &id, false);
         }
@@ -434,7 +452,11 @@ impl WatchEngine {
         let host = self.host()?;
         let removed = {
             let mut inner = self.inner.lock().unwrap();
-            let index = inner.rules.iter().position(|r| r.rule.id == id).ok_or_else(no_such_rule)?;
+            let index = inner
+                .rules
+                .iter()
+                .position(|r| r.rule.id == id)
+                .ok_or_else(no_such_rule)?;
             let rt = inner.rules.remove(index);
             inner.history.remove(id);
             rt
@@ -456,7 +478,10 @@ impl WatchEngine {
             if rt.running.is_some() {
                 return Err(AppError::msg(format!("“{}” is already running.", rt.rule.name)));
             }
-            rt.pending = Some(Pending { at_ms: now_ms(), trigger: "manual" });
+            rt.pending = Some(Pending {
+                at_ms: now_ms(),
+                trigger: "manual",
+            });
         }
         self.emit_statuses(&host, None);
         self.wake.notify_one();
@@ -504,7 +529,10 @@ impl WatchEngine {
                     }
                 } else if rt.dirty && rt.running.is_none() && rt.rule.enabled {
                     rt.dirty = false;
-                    rt.pending = Some(Pending { at_ms: now + u64::from(rt.rule.settle_seconds) * 1000, trigger: "change" });
+                    rt.pending = Some(Pending {
+                        at_ms: now + u64::from(rt.rule.settle_seconds) * 1000,
+                        trigger: "change",
+                    });
                 }
             }
         }
@@ -532,7 +560,12 @@ impl WatchEngine {
     /// Whether the rule's file system watcher is attached.
     #[cfg(test)]
     pub fn is_watching(&self, id: &str) -> bool {
-        self.inner.lock().unwrap().rules.iter().any(|rt| rt.rule.id == id && rt.watcher.is_some())
+        self.inner
+            .lock()
+            .unwrap()
+            .rules
+            .iter()
+            .any(|rt| rt.rule.id == id && rt.watcher.is_some())
     }
 
     // ----- used by the run task (run.rs) -----
@@ -540,7 +573,12 @@ impl WatchEngine {
     /// Whether the run should stop: the user asked, or its rule was deleted.
     pub(super) fn stop_requested(&self, rule_id: &str, run_id: &str) -> bool {
         let inner = self.inner.lock().unwrap();
-        match inner.rules.iter().find(|r| r.rule.id == rule_id).and_then(|r| r.running.as_ref()) {
+        match inner
+            .rules
+            .iter()
+            .find(|r| r.rule.id == rule_id)
+            .and_then(|r| r.running.as_ref())
+        {
             Some(running) if running.run.id == run_id => running.stop_requested,
             _ => true,
         }
@@ -694,7 +732,10 @@ impl WatchEngine {
                 match attached {
                     Ok(watcher) => {
                         if let Some(error) = rt.watch_error.take() {
-                            log::info!("watch folder “{}” is watching again (it failed with: {error})", rt.rule.name);
+                            log::info!(
+                                "watch folder “{}” is watching again (it failed with: {error})",
+                                rt.rule.name
+                            );
                         }
                         stale = rt.watcher.replace(watcher);
                         // What happened while nothing watched is unknown; run once to catch up.
@@ -731,7 +772,9 @@ impl WatchEngine {
     fn detach(&self, host: &HostRef, rule_id: &str, gen: u64, message: String) {
         let old = {
             let mut inner = self.inner.lock().unwrap();
-            let Some(rt) = inner.rule_mut(rule_id).filter(|r| r.gen == gen) else { return };
+            let Some(rt) = inner.rule_mut(rule_id).filter(|r| r.gen == gen) else {
+                return;
+            };
             log::warn!("watch folder “{}” stopped watching: {message}", rt.rule.name);
             rt.watch_error = Some(message);
             rt.next_attach_ms = now_ms() + ATTACH_RETRY.as_millis() as u64;
@@ -765,7 +808,12 @@ impl WatchEngine {
                             match &mut rt.pending {
                                 // A run already due for another reason covers this change too.
                                 Some(p) if p.trigger != "change" => {}
-                                _ => rt.pending = Some(Pending { at_ms, trigger: "change" }),
+                                _ => {
+                                    rt.pending = Some(Pending {
+                                        at_ms,
+                                        trigger: "change",
+                                    })
+                                }
                             }
                         }
                     }
@@ -774,7 +822,10 @@ impl WatchEngine {
                 FsMsg::Error { rule_id, gen, message } => {
                     let roots = {
                         let mut inner = engine.inner.lock().unwrap();
-                        inner.rule_mut(&rule_id).filter(|r| r.gen == gen).map(|r| watched_roots(&r.rule))
+                        inner
+                            .rule_mut(&rule_id)
+                            .filter(|r| r.gen == gen)
+                            .map(|r| watched_roots(&r.rule))
                     };
                     let Some(roots) = roots else { continue };
                     match roots.iter().find(|root| !Path::new(root).is_dir()) {
@@ -816,7 +867,10 @@ impl WatchEngine {
                     continue;
                 }
                 if rt.next_interval_ms.is_some_and(|at| at <= now) && rt.pending.is_none() {
-                    rt.pending = Some(Pending { at_ms: now, trigger: "interval" });
+                    rt.pending = Some(Pending {
+                        at_ms: now,
+                        trigger: "interval",
+                    });
                 }
             }
             // Due runs, oldest timer first, while slots are free.
@@ -833,8 +887,8 @@ impl WatchEngine {
                 let rt = &mut inner.rules[i];
                 let pending = rt.pending.clone().expect("filtered on pending");
                 let manual = pending.trigger == "manual";
-                let allowed = manual
-                    || (rt.rule.enabled && !paused && (pending.trigger != "change" || rt.watcher.is_some()));
+                let allowed =
+                    manual || (rt.rule.enabled && !paused && (pending.trigger != "change" || rt.watcher.is_some()));
                 if !allowed {
                     rt.pending = None;
                     rt.blocked = false;
@@ -858,7 +912,10 @@ impl WatchEngine {
                     status: "running".into(),
                     ..Default::default()
                 };
-                rt.running = Some(Running { run: run.clone(), stop_requested: false });
+                rt.running = Some(Running {
+                    run: run.clone(),
+                    stop_requested: false,
+                });
                 starts.push((rt.rule.clone(), run));
             }
             for (_, run) in &starts {
@@ -881,8 +938,19 @@ impl WatchEngine {
             }
         }
         for (rule_id, gen) in gone {
-            let roots = self.inner.lock().unwrap().rules.iter().find(|r| r.rule.id == rule_id).map(|r| watched_roots(&r.rule));
-            if let Some(gone) = roots.unwrap_or_default().into_iter().find(|root| !Path::new(root).is_dir()) {
+            let roots = self
+                .inner
+                .lock()
+                .unwrap()
+                .rules
+                .iter()
+                .find(|r| r.rule.id == rule_id)
+                .map(|r| watched_roots(&r.rule));
+            if let Some(gone) = roots
+                .unwrap_or_default()
+                .into_iter()
+                .find(|root| !Path::new(root).is_dir())
+            {
                 self.detach(host, &rule_id, gen, missing_folder(&gone));
             }
         }
@@ -905,16 +973,27 @@ fn missing_folder(folder: &str) -> String {
 }
 
 /// A recursive watcher on each of `sources` that sends the changes `filter` lets through.
-fn make_watcher(sources: &[PathBuf], filter: EventFilter, tx: mpsc::UnboundedSender<FsMsg>) -> Result<RecommendedWatcher, String> {
+fn make_watcher(
+    sources: &[PathBuf],
+    filter: EventFilter,
+    tx: mpsc::UnboundedSender<FsMsg>,
+) -> Result<RecommendedWatcher, String> {
     if let Some(gone) = sources.iter().find(|s| !s.is_dir()) {
         return Err(missing_folder(&gone.to_string_lossy()));
     }
     let (rule_id, gen) = (filter.rule_id.clone(), filter.gen);
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<Event>| {
         let msg = match result {
-            Ok(event) if filter.relevant(&event) => FsMsg::Change { rule_id: filter.rule_id.clone(), gen: filter.gen },
+            Ok(event) if filter.relevant(&event) => FsMsg::Change {
+                rule_id: filter.rule_id.clone(),
+                gen: filter.gen,
+            },
             Ok(_) => return,
-            Err(e) => FsMsg::Error { rule_id: filter.rule_id.clone(), gen: filter.gen, message: e.to_string() },
+            Err(e) => FsMsg::Error {
+                rule_id: filter.rule_id.clone(),
+                gen: filter.gen,
+                message: e.to_string(),
+            },
         };
         let _ = tx.send(msg);
     })

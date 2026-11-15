@@ -77,7 +77,9 @@ fn describe(err: &lettre::transport::smtp::Error, where_: &str, security: &str, 
         let reply = format!("{code} {detail}").trim().to_string();
         return match code.as_str() {
             "535" | "534" | "454" if signs_in => format!("The server refused the password: {reply}"),
-            "530" if !signs_in => format!("The server wants Arcus to sign in first (set a username and password): {reply}"),
+            "530" if !signs_in => {
+                format!("The server wants Arcus to sign in first (set a username and password): {reply}")
+            }
             "530" => format!("The server wants a secure connection or a sign-in first: {reply}"),
             _ if err.is_transient() => format!("The server could not take the email right now: {reply}"),
             _ => format!("The server refused the email: {reply}"),

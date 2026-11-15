@@ -23,7 +23,10 @@ fn var(name: &str) -> Option<String> {
 }
 
 pub fn update_check_delay() -> Option<Duration> {
-    var("ARCUS_E2E_UPDATE_DELAY_MS")?.parse().ok().map(Duration::from_millis)
+    var("ARCUS_E2E_UPDATE_DELAY_MS")?
+        .parse()
+        .ok()
+        .map(Duration::from_millis)
 }
 
 pub fn install_update_when_found() -> bool {

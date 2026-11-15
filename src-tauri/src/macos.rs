@@ -354,9 +354,7 @@ pub fn open_settings_url(_url: &str) -> Result<(), String> {
 pub fn privacy_pane_url(pane: &str) -> Option<&'static str> {
     Some(match pane {
         "fullDiskAccess" => "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
-        "filesAndFolders" => {
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"
-        }
+        "filesAndFolders" => "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders",
         "localNetwork" => "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork",
         "security" => "x-apple.systempreferences:com.apple.preference.security?General",
         _ => return None,
@@ -399,7 +397,10 @@ mod tests {
         plist("Rclone GUI.app", "com.rclonegui.desktop");
         plist("Arcus.app", "com.rclonegui.desktop");
         let dirs = [apps.clone()];
-        assert_eq!(legacy_installs_in(&dirs, "com.rclonegui.desktop"), vec![apps.join("Rclone GUI.app")]);
+        assert_eq!(
+            legacy_installs_in(&dirs, "com.rclonegui.desktop"),
+            vec![apps.join("Rclone GUI.app")]
+        );
         // Someone else's app that happens to have the old name is left alone.
         assert!(legacy_installs_in(&dirs, "com.example.other").is_empty());
         std::fs::remove_dir_all(&home).unwrap();
@@ -408,7 +409,9 @@ mod tests {
     #[test]
     fn privacy_panes_map_to_system_settings_links() {
         for pane in ["fullDiskAccess", "filesAndFolders", "localNetwork", "security"] {
-            assert!(privacy_pane_url(pane).unwrap().starts_with("x-apple.systempreferences:"));
+            assert!(privacy_pane_url(pane)
+                .unwrap()
+                .starts_with("x-apple.systempreferences:"));
         }
         assert!(privacy_pane_url("clipboard").is_none());
     }

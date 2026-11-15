@@ -99,10 +99,7 @@ fn plan(paths: &[String], mode: Mode) -> AppResult<Plan> {
         Action::Open => native.truncate(1),
         Action::Reveal => native.truncate(MAX_REVEALED),
     }
-    Ok(Plan {
-        action,
-        paths: native,
-    })
+    Ok(Plan { action, paths: native })
 }
 
 /// The policy: only a folder that is not a macOS package may be opened, and a root has
@@ -142,10 +139,7 @@ fn is_absolute(path: &str, windows: bool) -> bool {
     }
     let bytes = path.as_bytes();
     path.starts_with(r"\\")
-        || (bytes.len() >= 3
-            && bytes[0].is_ascii_alphabetic()
-            && bytes[1] == b':'
-            && bytes[2] == b'\\')
+        || (bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\')
 }
 
 /// Whether the path is still there. Only "no such file" counts as gone: a folder macOS
@@ -222,13 +216,10 @@ mod tests {
     /// A stock application bundle, if this Mac has one of them.
     #[cfg(target_os = "macos")]
     fn stock_bundle() -> Option<&'static Path> {
-        [
-            "/System/Applications/Calculator.app",
-            "/Applications/Safari.app",
-        ]
-        .into_iter()
-        .map(Path::new)
-        .find(|bundle| bundle.exists())
+        ["/System/Applications/Calculator.app", "/Applications/Safari.app"]
+            .into_iter()
+            .map(Path::new)
+            .find(|bundle| bundle.exists())
     }
 
     #[test]
@@ -240,15 +231,9 @@ mod tests {
 
     #[test]
     fn windows_paths_are_spelled_with_backslashes() {
-        assert_eq!(
-            native_path("C:/Users/me/file.txt", true),
-            r"C:\Users\me\file.txt"
-        );
+        assert_eq!(native_path("C:/Users/me/file.txt", true), r"C:\Users\me\file.txt");
         assert_eq!(native_path(r"C:\Users\me", true), r"C:\Users\me");
-        assert_eq!(
-            native_path("//server/share/dir", true),
-            r"\\server\share\dir"
-        );
+        assert_eq!(native_path("//server/share/dir", true), r"\\server\share\dir");
     }
 
     #[test]
@@ -261,10 +246,7 @@ mod tests {
     #[test]
     fn only_a_root_keeps_its_trailing_separator() {
         assert_eq!(native_path("C:/Users/x/", true), r"C:\Users\x");
-        assert_eq!(
-            native_path("//server/share/dir/", true),
-            r"\\server\share\dir"
-        );
+        assert_eq!(native_path("//server/share/dir/", true), r"\\server\share\dir");
     }
 
     #[test]
@@ -317,14 +299,8 @@ mod tests {
         assert_eq!(revealed.paths, vec![file.clone()]);
 
         // A folder opens, a file in it is revealed instead of being launched.
-        assert_eq!(
-            plan(&[text(&dir)], Mode::Open).unwrap().action,
-            Action::Open
-        );
-        assert_eq!(
-            plan(&[text(&file)], Mode::Open).unwrap().action,
-            Action::Reveal
-        );
+        assert_eq!(plan(&[text(&dir)], Mode::Open).unwrap().action, Action::Open);
+        assert_eq!(plan(&[text(&file)], Mode::Open).unwrap().action, Action::Reveal);
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

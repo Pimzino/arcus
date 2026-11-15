@@ -58,12 +58,7 @@ impl RcClient {
 
     /// Call an rc method whose response body is streamed (e.g. `core/command`
     /// with `returnType: "STREAM"`), handing every chunk to `on_chunk`.
-    pub async fn stream<F: FnMut(&[u8])>(
-        &self,
-        path: &str,
-        params: &Value,
-        mut on_chunk: F,
-    ) -> AppResult<()> {
+    pub async fn stream<F: FnMut(&[u8])>(&self, path: &str, params: &Value, mut on_chunk: F) -> AppResult<()> {
         let params = normalise_params(params);
         let response = self.request(path, &params).send().await?;
         let status = response.status();

@@ -255,29 +255,31 @@ pub fn classify(line: &LogLine) -> Option<ActivityKind> {
         return Some(ActivityKind::Notice);
     }
     let msg = line.msg.as_str();
-    Some(if msg == "Making directory" || msg.starts_with("Made directory with metadata") {
-        ActivityKind::FolderCreated
-    } else if msg.starts_with("Made directory with modification time") {
-        // follows "Making directory" for the same folder
-        return None;
-    } else if msg.contains("Copied (") {
-        ActivityKind::Copied
-    } else if msg.starts_with("Moved (") || msg == "Moved into backup dir" {
-        ActivityKind::Moved
-    } else if msg.starts_with("Renamed from") {
-        ActivityKind::Renamed
-    } else if msg == "Deleted" {
-        ActivityKind::Deleted
-    } else if msg == "Removing directory" {
-        ActivityKind::FolderRemoved
-    } else if msg.starts_with("Updated modification time")
-        || msg.starts_with("Updated directory metadata")
-        || msg.starts_with("Set directory modification time")
-    {
-        ActivityKind::Updated
-    } else {
-        ActivityKind::Info
-    })
+    Some(
+        if msg == "Making directory" || msg.starts_with("Made directory with metadata") {
+            ActivityKind::FolderCreated
+        } else if msg.starts_with("Made directory with modification time") {
+            // follows "Making directory" for the same folder
+            return None;
+        } else if msg.contains("Copied (") {
+            ActivityKind::Copied
+        } else if msg.starts_with("Moved (") || msg == "Moved into backup dir" {
+            ActivityKind::Moved
+        } else if msg.starts_with("Renamed from") {
+            ActivityKind::Renamed
+        } else if msg == "Deleted" {
+            ActivityKind::Deleted
+        } else if msg == "Removing directory" {
+            ActivityKind::FolderRemoved
+        } else if msg.starts_with("Updated modification time")
+            || msg.starts_with("Updated directory metadata")
+            || msg.starts_with("Set directory modification time")
+        {
+            ActivityKind::Updated
+        } else {
+            ActivityKind::Info
+        },
+    )
 }
 
 /// Counts a transfer's events and queues them for the next batch.
@@ -378,7 +380,12 @@ pub async fn pump<R: AsyncRead + Unpin>(
     let mut min_level = Level::Debug;
     if let Some(log) = log {
         min_level = log.min_level;
-        match tokio::fs::OpenOptions::new().create(true).append(true).open(&log.path).await {
+        match tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log.path)
+            .await
+        {
             Ok(f) => file = Some(BufWriter::new(f)),
             Err(e) => log::error!("cannot write the transfer log {}: {e}", log.path.display()),
         }
@@ -460,8 +467,14 @@ mod tests {
     #[test]
     fn json_lines_are_parsed() {
         let l = line(COPIED);
-        assert_eq!((l.level, l.level_name.as_str(), l.msg.as_str()), (Level::Info, "INFO", "Copied (new)"));
-        assert_eq!((l.object.as_deref(), l.size), (Some("Mixdowns/Reel 03/part_2.wav"), Some(200_000)));
+        assert_eq!(
+            (l.level, l.level_name.as_str(), l.msg.as_str()),
+            (Level::Info, "INFO", "Copied (new)")
+        );
+        assert_eq!(
+            (l.object.as_deref(), l.size),
+            (Some("Mixdowns/Reel 03/part_2.wav"), Some(200_000))
+        );
         assert_eq!(line(DRY_RUN).skipped.as_deref(), Some("make directory"));
     }
 
@@ -469,32 +482,61 @@ mod tests {
     fn other_output_is_kept_as_it_is() {
         let l = line("2026/09/17 13:28:09 DEBUG : Setting --config from environment variable");
         assert_eq!(l.level, Level::Notice);
-        assert_eq!(l.to_text(), "2026/09/17 13:28:09 DEBUG : Setting --config from environment variable");
+        assert_eq!(
+            l.to_text(),
+            "2026/09/17 13:28:09 DEBUG : Setting --config from environment variable"
+        );
         assert_eq!(line(r#"{"not":"a log line"}"#).to_text(), r#"{"not":"a log line"}"#);
         assert_eq!(classify(&line("panic: runtime error")), Some(ActivityKind::Notice));
     }
 
     #[test]
     fn text_matches_rclones_own_log_format() {
-        assert_eq!(line(MKDIR).to_text(), "2026/09/17 13:28:09 INFO  : Mixdowns/Reel 01: Making directory");
-        let notice = line(r#"{"time":"2026-09-17T13:27:05.672858+01:00","level":"notice","msg":"Serving remote control on http://127.0.0.1:58731/","source":"rcserver/rcserver.go:151"}"#);
-        assert_eq!(notice.to_text(), "2026/09/17 13:27:05 NOTICE: Serving remote control on http://127.0.0.1:58731/");
+        assert_eq!(
+            line(MKDIR).to_text(),
+            "2026/09/17 13:28:09 INFO  : Mixdowns/Reel 01: Making directory"
+        );
+        let notice = line(
+            r#"{"time":"2026-09-17T13:27:05.672858+01:00","level":"notice","msg":"Serving remote control on http://127.0.0.1:58731/","source":"rcserver/rcserver.go:151"}"#,
+        );
+        assert_eq!(
+            notice.to_text(),
+            "2026/09/17 13:27:05 NOTICE: Serving remote control on http://127.0.0.1:58731/"
+        );
     }
 
     #[test]
     fn lines_are_classified() {
         let kind = |msg: &str, level: &str| {
-            classify(&line(&format!(r#"{{"time":"t","level":"{level}","msg":"{msg}","object":"x"}}"#)))
+            classify(&line(&format!(
+                r#"{{"time":"t","level":"{level}","msg":"{msg}","object":"x"}}"#
+            )))
         };
         assert_eq!(classify(&line(MKDIR)), Some(ActivityKind::FolderCreated));
-        assert_eq!(kind("Made directory with metadata (mtime=2026)", "info"), Some(ActivityKind::FolderCreated));
-        assert_eq!(kind("Made directory with modification time 2026", "info"), None, "second line about one folder");
-        assert_eq!(kind("Multi-thread Copied (replaced existing)", "info"), Some(ActivityKind::Copied));
-        assert_eq!(kind("Copied (server-side copy) to: other.wav", "info"), Some(ActivityKind::Copied));
+        assert_eq!(
+            kind("Made directory with metadata (mtime=2026)", "info"),
+            Some(ActivityKind::FolderCreated)
+        );
+        assert_eq!(
+            kind("Made directory with modification time 2026", "info"),
+            None,
+            "second line about one folder"
+        );
+        assert_eq!(
+            kind("Multi-thread Copied (replaced existing)", "info"),
+            Some(ActivityKind::Copied)
+        );
+        assert_eq!(
+            kind("Copied (server-side copy) to: other.wav", "info"),
+            Some(ActivityKind::Copied)
+        );
         assert_eq!(kind("Moved (server-side)", "info"), Some(ActivityKind::Moved));
         assert_eq!(kind("Deleted", "info"), Some(ActivityKind::Deleted));
         assert_eq!(kind("Removing directory", "info"), Some(ActivityKind::FolderRemoved));
-        assert_eq!(kind("Set directory modification time (using SetModTime)", "info"), Some(ActivityKind::Updated));
+        assert_eq!(
+            kind("Set directory modification time (using SetModTime)", "info"),
+            Some(ActivityKind::Updated)
+        );
         assert_eq!(kind("There was nothing to transfer", "info"), Some(ActivityKind::Info));
         assert_eq!(classify(&line(DRY_RUN)), Some(ActivityKind::Skipped));
         assert_eq!(kind("3 differences found", "notice"), Some(ActivityKind::Notice));
@@ -502,17 +544,35 @@ mod tests {
         assert_eq!(kind("Need to transfer - File not found at Destination", "debug"), None);
         let stats = line(r#"{"time":"t","level":"info","msg":"\nTransferred: 1 / 1, 100%","stats":{"bytes":1}}"#);
         assert_eq!(classify(&stats), None);
-        let rc_error = line(r#"{"time":"t","level":"error","msg":"rc: \"job/stop\": error: job not found","source":"rcserver/rcserver.go:187"}"#);
+        let rc_error = line(
+            r#"{"time":"t","level":"error","msg":"rc: \"job/stop\": error: job not found","source":"rcserver/rcserver.go:187"}"#,
+        );
         assert_eq!(classify(&rc_error), None, "the rc server's lines are not the job's");
-        assert_eq!(kind("Config file /x/rclone.conf not found - using defaults", "notice"), None);
-        let box_refresh = line(r#"{"time":"t","level":"error","msg":"Background token refresher failed: is a directory not a file","object":"box root 'IT_MAM/Story Films'","objectType":"string","source":"oauthutil/renew.go:54"}"#);
-        assert_eq!(classify(&box_refresh), Some(ActivityKind::Info), "the refresh worked; Box only answered about a folder");
-        assert_eq!(kind("Background token refresher failed: couldn't fetch token: invalid_grant", "error"), Some(ActivityKind::Error));
+        assert_eq!(
+            kind("Config file /x/rclone.conf not found - using defaults", "notice"),
+            None
+        );
+        let box_refresh = line(
+            r#"{"time":"t","level":"error","msg":"Background token refresher failed: is a directory not a file","object":"box root 'IT_MAM/Story Films'","objectType":"string","source":"oauthutil/renew.go:54"}"#,
+        );
+        assert_eq!(
+            classify(&box_refresh),
+            Some(ActivityKind::Info),
+            "the refresh worked; Box only answered about a folder"
+        );
+        assert_eq!(
+            kind(
+                "Background token refresher failed: couldn't fetch token: invalid_grant",
+                "error"
+            ),
+            Some(ActivityKind::Error)
+        );
     }
 
     #[test]
     fn colour_codes_are_removed() {
-        let json = serde_json::json!({ "time": "t", "level": "info", "msg": "\u{1b}[36mPath1\u{1b}[0m checking for diffs" });
+        let json =
+            serde_json::json!({ "time": "t", "level": "info", "msg": "\u{1b}[36mPath1\u{1b}[0m checking for diffs" });
         let l = line(&json.to_string());
         assert_eq!(l.msg, "Path1 checking for diffs");
     }
@@ -524,20 +584,29 @@ mod tests {
         state.record(&line(MKDIR));
         state.record(&line(COPIED));
         let first = state.take_batch("d").unwrap();
-        assert_eq!((first.seq, first.counts.folders_created, first.counts.copied), (2, 1, 1));
+        assert_eq!(
+            (first.seq, first.counts.folders_created, first.counts.copied),
+            (2, 1, 1)
+        );
         assert_eq!(first.events.iter().map(|e| e.seq).collect::<Vec<_>>(), [1, 2]);
         assert_eq!(first.events[1].size, Some(200_000));
 
         state.record(&line(DRY_RUN));
         let second = state.take_batch("d").unwrap();
-        assert_eq!((second.seq, second.counts.folders_created, second.counts.skipped), (3, 1, 1));
+        assert_eq!(
+            (second.seq, second.counts.folders_created, second.counts.skipped),
+            (3, 1, 1)
+        );
         assert_eq!(second.events.len(), 1);
         assert_eq!(second.events[0].action.as_deref(), Some("make directory"));
         assert_eq!(state.totals("d").events.len(), 0);
 
         state.record(&line(COPIED));
         state.reset();
-        assert_eq!((state.totals("d").seq, state.totals("d").counts), (0, ActivityCounts::default()));
+        assert_eq!(
+            (state.totals("d").seq, state.totals("d").counts),
+            (0, ActivityCounts::default())
+        );
         assert!(state.take_batch("d").is_none());
     }
 
@@ -550,8 +619,16 @@ mod tests {
         }
         let batch = state.take_batch("d").unwrap();
         assert_eq!(batch.events.len(), PENDING_MAX);
-        assert_eq!(batch.events[0].kind, ActivityKind::Error, "the error from before the burst is still there");
-        assert_eq!(batch.counts.copied as usize, PENDING_MAX + 50, "counts include the dropped events");
+        assert_eq!(
+            batch.events[0].kind,
+            ActivityKind::Error,
+            "the error from before the burst is still there"
+        );
+        assert_eq!(
+            batch.counts.copied as usize,
+            PENDING_MAX + 50,
+            "counts include the dropped events"
+        );
         assert_eq!(batch.events.last().unwrap().seq, batch.seq);
     }
 
@@ -561,7 +638,8 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("transfer.log");
         let _ = std::fs::remove_file(&path);
-        let debug = r#"{"time":"2026-09-17T13:28:09.1+01:00","level":"debug","msg":"Need to transfer","object":"a.wav"}"#;
+        let debug =
+            r#"{"time":"2026-09-17T13:28:09.1+01:00","level":"debug","msg":"Need to transfer","object":"a.wav"}"#;
         // a name that is not UTF-8 in output that is not JSON
         let mut input = format!("{MKDIR}\n{debug}\n{COPIED}\n").into_bytes();
         input.extend_from_slice(b"panic: bad name \xff\xfe\n");
@@ -577,7 +655,10 @@ mod tests {
         pump(
             &input[..],
             "d1".into(),
-            Some(LogFile { path: path.clone(), min_level: Level::Info }),
+            Some(LogFile {
+                path: path.clone(),
+                min_level: Level::Info,
+            }),
             tail.clone(),
             state.clone(),
             sink,
@@ -585,13 +666,26 @@ mod tests {
         .await;
 
         let log = std::fs::read_to_string(&path).unwrap();
-        assert!(log.starts_with("2026/09/17 13:28:09 INFO  : Mixdowns/Reel 01: Making directory\n"), "{log}");
+        assert!(
+            log.starts_with("2026/09/17 13:28:09 INFO  : Mixdowns/Reel 01: Making directory\n"),
+            "{log}"
+        );
         assert!(!log.contains("Need to transfer"), "debug lines stay out of an INFO log");
         assert!(log.contains("panic: bad name"));
-        assert!(log.trim_end().ends_with("ERROR : a.wav: Failed to copy: upload failed: 503"));
+        assert!(log
+            .trim_end()
+            .ends_with("ERROR : a.wav: Failed to copy: upload failed: 503"));
 
         let totals = state.lock().unwrap().totals("d1");
-        assert_eq!((totals.counts.folders_created, totals.counts.copied, totals.counts.errors, totals.counts.notices), (1, 1, 1, 1));
+        assert_eq!(
+            (
+                totals.counts.folders_created,
+                totals.counts.copied,
+                totals.counts.errors,
+                totals.counts.notices
+            ),
+            (1, 1, 1, 1)
+        );
         let events: Vec<ActivityEvent> = batches.lock().unwrap().iter().flat_map(|b| b.events.clone()).collect();
         assert_eq!(events.len(), 4);
         assert_eq!(events.last().unwrap().kind, ActivityKind::Error);

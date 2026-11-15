@@ -1,0 +1,3 @@
+# The Rust code's comments and lines were written to about 120 columns; rustfmt's default (100) would rewrap far
+# more of it. CI checks the formatting (cargo fmt --check).
+max_width = 120

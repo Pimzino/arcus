@@ -1,7 +1,7 @@
 name: CI
 
-# Every push to main and every pull request: the TypeScript type check, the UI's unit tests (vitest) and the
-# Rust tests, and an end-to-end run of the real app on Linux (e2e/linux.mjs). release.yml runs this same
+# Every push to main and every pull request: the TypeScript type check, the UI's unit tests (vitest), the Rust
+# formatting (rustfmt.toml) and the Rust tests, and an end-to-end run of the real app on Linux (e2e/linux.mjs). release.yml runs this same
 # workflow before it builds anything.
 
 on:
@@ -38,6 +38,9 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: src-tauri

@@ -106,19 +106,30 @@ pub fn setup(app: &tauri::App) {
         "Arcus {} ({:?} bundle) {}",
         app.package_info().version,
         tauri::utils::platform::bundle_type(),
-        if can_install() { "can install updates itself" } else { "cannot install updates itself" }
+        if can_install() {
+            "can install updates itself"
+        } else {
+            "cannot install updates itself"
+        }
     );
     tauri::async_runtime::spawn(check_periodically(app.handle().clone()));
 }
 
 pub fn status(app: &AppHandle) -> UpdateStatus {
-    app.state::<UpdaterState>().status.lock().unwrap().clone().unwrap_or_else(|| initial_status(app))
+    app.state::<UpdaterState>()
+        .status
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap_or_else(|| initial_status(app))
 }
 
 /// The version a newer release has, when one was found and is not being installed yet (for the tray).
 pub fn available_version(app: &AppHandle) -> Option<String> {
     let status = app.try_state::<UpdaterState>()?.status.lock().unwrap().clone()?;
-    matches!(status.state, UpdateState::Available | UpdateState::Downloading).then_some(status.version).flatten()
+    matches!(status.state, UpdateState::Available | UpdateState::Downloading)
+        .then_some(status.version)
+        .flatten()
 }
 
 fn set_status(app: &AppHandle, change: impl FnOnce(&mut UpdateStatus)) -> UpdateStatus {
@@ -148,18 +159,30 @@ async fn check(app: &AppHandle, manual: bool) -> UpdateStatus {
         s.error = None;
     });
     let result = async {
-        app.updater_builder().timeout(Duration::from_secs(30)).build()?.check().await
+        app.updater_builder()
+            .timeout(Duration::from_secs(30))
+            .build()?
+            .check()
+            .await
     }
     .await;
     let now = crate::rclone::daemon::now_unix();
     match result {
         Ok(Some(update)) => {
-            log::info!("Arcus {} is available (this is {})", update.version, update.current_version);
+            log::info!(
+                "Arcus {} is available (this is {})",
+                update.version,
+                update.current_version
+            );
             let status = set_status(app, |s| {
                 s.state = UpdateState::Available;
                 s.version = Some(update.version.clone());
                 s.notes = update.body.clone();
-                s.date = update.raw_json.get("pub_date").and_then(|d| d.as_str()).map(str::to_string);
+                s.date = update
+                    .raw_json
+                    .get("pub_date")
+                    .and_then(|d| d.as_str())
+                    .map(str::to_string);
                 s.downloaded = 0;
                 s.total = None;
                 s.checked_at_unix = Some(now);
@@ -226,7 +249,10 @@ async fn check_periodically(app: AppHandle) {
         if enabled && due && !crate::shutdown::is_quitting() {
             last = Some(now);
             // An update already found needs no new check until the user acts on it.
-            if !matches!(status(&app).state, UpdateState::Available | UpdateState::Downloading | UpdateState::Installing) {
+            if !matches!(
+                status(&app).state,
+                UpdateState::Available | UpdateState::Downloading | UpdateState::Installing
+            ) {
                 let found = check(&app, false).await;
                 if found.state == UpdateState::Available && crate::e2e::install_update_when_found() {
                     if let Err(err) = update_install(app.clone()).await {
@@ -256,7 +282,9 @@ pub async fn update_check(app: AppHandle) -> UpdateStatus {
 #[tauri::command]
 pub async fn update_install(app: AppHandle) -> AppResult<()> {
     if !can_install() {
-        return Err(AppError::msg("This copy of Arcus cannot update itself; download the new version from GitHub."));
+        return Err(AppError::msg(
+            "This copy of Arcus cannot update itself; download the new version from GitHub.",
+        ));
     }
     let state = app.state::<UpdaterState>();
     let _busy = state.busy.lock().await;
@@ -300,7 +328,11 @@ pub async fn update_install(app: AppHandle) -> AppResult<()> {
             return Err(AppError::msg(message));
         }
     };
-    log::info!("installing Arcus {} ({} bytes, signature checked)", update.version, bytes.len());
+    log::info!(
+        "installing Arcus {} ({} bytes, signature checked)",
+        update.version,
+        bytes.len()
+    );
     set_status(&app, |s| s.state = UpdateState::Installing);
 
     // Nothing of the old version may keep running: on Windows the installer replaces the files of a

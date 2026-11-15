@@ -97,11 +97,7 @@ pub fn version_key(version: &str) -> (u64, u64, u64) {
         .trim_start_matches('v')
         .split('.')
         .map(|p| p.parse::<u64>().unwrap_or(0));
-    (
-        it.next().unwrap_or(0),
-        it.next().unwrap_or(0),
-        it.next().unwrap_or(0),
-    )
+    (it.next().unwrap_or(0), it.next().unwrap_or(0), it.next().unwrap_or(0))
 }
 
 /// Latest stable version according to <https://downloads.rclone.org/version.txt>.
@@ -212,9 +208,7 @@ pub async fn install(
         fingerprint: verified.signer_fingerprint.clone(),
     });
     let expected = verified.entries.get(&asset).cloned().ok_or_else(|| {
-        AppError::Verification(format!(
-            "{asset} is not listed in the signed SHA256SUMS for {version}"
-        ))
+        AppError::Verification(format!("{asset} is not listed in the signed SHA256SUMS for {version}"))
     })?;
 
     // 2. Independent cross-check against the digest GitHub publishes for the asset.
@@ -264,9 +258,7 @@ pub async fn install(
             "SHA-256 mismatch for {asset}: expected {expected}, got {sha256}"
         )));
     }
-    emit(ProvisionEvent::ChecksumVerified {
-        sha256: sha256.clone(),
-    });
+    emit(ProvisionEvent::ChecksumVerified { sha256: sha256.clone() });
 
     // 4. Extract only the executable.
     emit(ProvisionEvent::Extracting);
@@ -304,10 +296,7 @@ pub async fn install(
             .map(|d| d.as_secs())
             .unwrap_or(0),
     };
-    write_atomic(
-        &dest_dir.join(INSTALL_MANIFEST),
-        &serde_json::to_vec_pretty(&info)?,
-    )?;
+    write_atomic(&dest_dir.join(INSTALL_MANIFEST), &serde_json::to_vec_pretty(&info)?)?;
     emit(ProvisionEvent::Done {
         version,
         path: info.path.clone(),
@@ -316,11 +305,7 @@ pub async fn install(
 }
 
 /// The `sha256:` digest GitHub publishes for a release asset, if any.
-async fn github_asset_digest(
-    http: &reqwest::Client,
-    version: &str,
-    asset: &str,
-) -> AppResult<Option<String>> {
+async fn github_asset_digest(http: &reqwest::Client, version: &str, asset: &str) -> AppResult<Option<String>> {
     let url = format!("{GITHUB_RELEASE_API}/{version}");
     let release: Value = http
         .get(&url)
@@ -393,8 +378,8 @@ async fn download_with_sha256(
 /// Copy exactly `expected_entry` out of the zip into `dest` (executable bit set on Unix).
 fn extract_binary(zip_path: &Path, expected_entry: &str, dest: &Path) -> AppResult<()> {
     let file = std::fs::File::open(zip_path)?;
-    let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| AppError::Verification(format!("invalid zip archive: {e}")))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| AppError::Verification(format!("invalid zip archive: {e}")))?;
     for index in 0..archive.len() {
         let mut entry = archive
             .by_index(index)
@@ -460,10 +445,7 @@ mod live_tests {
             .unwrap_or_else(|_| std::env::temp_dir().join(format!("arcus-test-{}", std::process::id())));
         let paths = AppPaths::new(base.join("data"), base.join("logs"));
         paths.ensure().unwrap();
-        let http = reqwest::Client::builder()
-            .user_agent("Arcus-test")
-            .build()
-            .unwrap();
+        let http = reqwest::Client::builder().user_agent("Arcus-test").build().unwrap();
         let target = platform::target().unwrap();
         let version = resolve_latest_version(&http).await.unwrap();
         let emit = |event: ProvisionEvent| {

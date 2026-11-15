@@ -80,7 +80,10 @@ enum LogAttachment {
     Unreadable(String),
     Whole(Vec<u8>),
     /// The last `ATTACH_LIMIT` bytes (from the start of a line) of a file of `total` bytes.
-    Tail { bytes: Vec<u8>, total: u64 },
+    Tail {
+        bytes: Vec<u8>,
+        total: u64,
+    },
 }
 
 async fn read_log(path: &Path) -> LogAttachment {
@@ -164,9 +167,9 @@ pub async fn report_message(settings: &EmailSettings, report: &JobReport) -> Res
         match &log {
             LogAttachment::NotWanted | LogAttachment::Whole(_) => {}
             LogAttachment::Missing => body.push_str("The log file no longer exists, so it is not attached.\n"),
-            LogAttachment::Unreadable(err) => {
-                body.push_str(&format!("The log file could not be read ({err}), so it is not attached.\n"))
-            }
+            LogAttachment::Unreadable(err) => body.push_str(&format!(
+                "The log file could not be read ({err}), so it is not attached.\n"
+            )),
             LogAttachment::Tail { total, .. } => body.push_str(&format!(
                 "The log is {}, so only its last {} is attached.\n",
                 human_bytes(*total),
@@ -244,10 +247,28 @@ fn base_builder(from: &Mailbox, to: &[Mailbox]) -> lettre::message::MessageBuild
 /// "Monday 28 September 2026, 14:03:05 UTC" without a date library: the civil-from-days conversion
 /// `transfers::compact_timestamp` also uses (Howard Hinnant's algorithm).
 pub fn human_time(unix: u64) -> String {
-    const WEEKDAYS: [&str; 7] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const WEEKDAYS: [&str; 7] = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+    ];
     const MONTHS: [&str; 12] = [
-        "January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
-        "November", "December",
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
     ];
     let days = (unix / 86_400) as i64;
     let secs = unix % 86_400;

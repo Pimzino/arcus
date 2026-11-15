@@ -46,7 +46,8 @@ impl Checks {
         if !ok {
             self.failed += 1;
         }
-        self.entries.push(json!({ "check": name, "ok": ok, "observed": observed }));
+        self.entries
+            .push(json!({ "check": name, "ok": ok, "observed": observed }));
     }
 }
 
@@ -80,7 +81,12 @@ async fn notify_and_wait(
     if !started {
         return None;
     }
-    Some(tokio::time::timeout(Duration::from_secs(60), rx).await.expect("send timed out").expect("done dropped"))
+    Some(
+        tokio::time::timeout(Duration::from_secs(60), rx)
+            .await
+            .expect("send timed out")
+            .expect("done dropped"),
+    )
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -90,7 +96,10 @@ async fn live_email_notifications() {
     std::fs::create_dir_all(&artifacts).unwrap();
     let work = std::env::temp_dir().join(format!("arcus-email-e2e-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&work).unwrap();
-    let mut checks = Checks { entries: Vec::new(), failed: 0 };
+    let mut checks = Checks {
+        entries: Vec::new(),
+        failed: 0,
+    };
 
     let (port, sink) = test_smtp::start().await;
     let password_file = password_path(&work);
@@ -103,8 +112,11 @@ async fn live_email_notifications() {
     }
 
     let log_path = work.join("20260928-120000-photos.log");
-    std::fs::write(&log_path, "2026/09/28 12:00:00 INFO  : starting\n2026/09/28 12:01:05 ERROR : a.jpg: 403 Forbidden\n")
-        .unwrap();
+    std::fs::write(
+        &log_path,
+        "2026/09/28 12:00:00 INFO  : starting\n2026/09/28 12:01:05 ERROR : a.jpg: 403 Forbidden\n",
+    )
+    .unwrap();
 
     let mut settings = EmailSettings {
         enabled: true,
@@ -127,7 +139,11 @@ async fn live_email_notifications() {
     ];
     for (policy, status) in gated {
         let started = notify_with(&settings, &password_file, report(status, None), policy, |_, _| {});
-        checks.check(&format!("policy {policy} + {status} sends nothing"), !started, json!(started));
+        checks.check(
+            &format!("policy {policy} + {status} sends nothing"),
+            !started,
+            json!(started),
+        );
     }
     settings.enabled = false;
     let started = notify_with(&settings, &password_file, report("error", None), "always", |_, _| {});
@@ -136,14 +152,26 @@ async fn live_email_notifications() {
 
     // 1. A failed job under "failure": sent, with the log attached.
     let result = notify_and_wait(&settings, &password_file, report("error", Some(&log_path)), "failure").await;
-    checks.check("failure + error is sent", result == Some(Ok(())), json!(format!("{result:?}")));
+    checks.check(
+        "failure + error is sent",
+        result == Some(Ok(())),
+        json!(format!("{result:?}")),
+    );
     let messages = sink.wait_for(1, Duration::from_secs(10)).await.unwrap_or_else(|m| m);
     let first = messages.first().cloned();
     if let Some(msg) = &first {
         std::fs::write(artifacts.join("email-test.eml"), &msg.data).unwrap();
         let subject = msg.subject().unwrap_or_default();
-        checks.check("subject of a failure", subject == "Arcus: “Photos → Box” failed", json!(subject));
-        checks.check("envelope from", msg.mail_from == "arcus@example.com", json!(msg.mail_from));
+        checks.check(
+            "subject of a failure",
+            subject == "Arcus: “Photos → Box” failed",
+            json!(subject),
+        );
+        checks.check(
+            "envelope from",
+            msg.mail_from == "arcus@example.com",
+            json!(msg.mail_from),
+        );
         checks.check(
             "envelope to (blank entries skipped, spaces trimmed)",
             msg.rcpt_to == vec!["jose@example.com".to_string(), "second@example.org".to_string()],
@@ -178,12 +206,20 @@ async fn live_email_notifications() {
 
     // 2. A success under "always": sent, no attachment.
     let result = notify_and_wait(&settings, &password_file, report("success", Some(&log_path)), "always").await;
-    checks.check("always + success is sent", result == Some(Ok(())), json!(format!("{result:?}")));
+    checks.check(
+        "always + success is sent",
+        result == Some(Ok(())),
+        json!(format!("{result:?}")),
+    );
     let messages = sink.wait_for(2, Duration::from_secs(10)).await.unwrap_or_else(|m| m);
     if let Some(msg) = messages.get(1) {
         std::fs::write(artifacts.join("email-always.eml"), &msg.data).unwrap();
         let subject = msg.subject().unwrap_or_default();
-        checks.check("subject of a success", subject == "Arcus: “Photos → Box” finished", json!(subject));
+        checks.check(
+            "subject of a success",
+            subject == "Arcus: “Photos → Box” finished",
+            json!(subject),
+        );
         let attached = msg.text().contains("Content-Disposition: attachment");
         checks.check("no attachment on success", !attached, json!(attached));
     } else {
@@ -198,7 +234,11 @@ async fn live_email_notifications() {
     let mut lost = report("lost", Some(&big_log));
     lost.kind = "check".into();
     let result = notify_and_wait(&settings, &password_file, lost, "failure").await;
-    checks.check("failure + lost is sent", result == Some(Ok(())), json!(format!("{result:?}")));
+    checks.check(
+        "failure + lost is sent",
+        result == Some(Ok(())),
+        json!(format!("{result:?}")),
+    );
     let messages = sink.wait_for(3, Duration::from_secs(20)).await.unwrap_or_else(|m| m);
     if let Some(msg) = messages.get(2) {
         std::fs::write(artifacts.join("email-tail.eml"), &msg.data).unwrap();
@@ -214,7 +254,11 @@ async fn live_email_notifications() {
         let size = msg.data.len();
         // The tail is 5 MB (about 6.8 MB if lettre picks base64); the whole log is over 9 MB.
         let bounded = size > 5_000_000 && size < 7_500_000 && big.len() > 9_000_000;
-        checks.check("attachment is the last 5 MB only", bounded, json!({ "rawBytes": size, "logBytes": big.len() }));
+        checks.check(
+            "attachment is the last 5 MB only",
+            bounded,
+            json!({ "rawBytes": size, "logBytes": big.len() }),
+        );
     } else {
         checks.check("lost email arrived", false, json!(messages.len()));
     }
@@ -232,7 +276,15 @@ async fn live_email_notifications() {
 
     // 5. Errors read as sentences.
     let (reject_port, _reject_sink) = test_smtp::start_with(SinkOptions { reject_auth: true }).await;
-    let refused = send_report(&EmailSettings { port: reject_port, ..settings.clone() }, &password_file, &report("error", None)).await;
+    let refused = send_report(
+        &EmailSettings {
+            port: reject_port,
+            ..settings.clone()
+        },
+        &password_file,
+        &report("error", None),
+    )
+    .await;
     let text = refused.clone().err().unwrap_or_default();
     checks.check(
         "refused password",
@@ -240,20 +292,47 @@ async fn live_email_notifications() {
         json!(text),
     );
 
-    let starttls = send_report(&EmailSettings { security: "starttls".into(), ..settings.clone() }, &password_file, &report("error", None)).await;
+    let starttls = send_report(
+        &EmailSettings {
+            security: "starttls".into(),
+            ..settings.clone()
+        },
+        &password_file,
+        &report("error", None),
+    )
+    .await;
     let text = starttls.err().unwrap_or_default();
-    checks.check("STARTTLS missing", text.contains("does not offer STARTTLS"), json!(text));
+    checks.check(
+        "STARTTLS missing",
+        text.contains("does not offer STARTTLS"),
+        json!(text),
+    );
 
     let closed_port = {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         listener.local_addr().unwrap().port()
     };
-    let unreachable = send_report(&EmailSettings { port: closed_port, ..settings.clone() }, &password_file, &report("error", None)).await;
+    let unreachable = send_report(
+        &EmailSettings {
+            port: closed_port,
+            ..settings.clone()
+        },
+        &password_file,
+        &report("error", None),
+    )
+    .await;
     let text = unreachable.err().unwrap_or_default();
-    checks.check("nothing listening", text.starts_with("Could not reach 127.0.0.1:"), json!(text));
+    checks.check(
+        "nothing listening",
+        text.starts_with("Could not reach 127.0.0.1:"),
+        json!(text),
+    );
 
     let bad_to = send_report(
-        &EmailSettings { to_addresses: vec!["jose at example".into()], ..settings.clone() },
+        &EmailSettings {
+            to_addresses: vec!["jose at example".into()],
+            ..settings.clone()
+        },
         &password_file,
         &report("error", None),
     )
@@ -267,7 +346,11 @@ async fn live_email_notifications() {
 
     // Without a saved password, a server that wants one gets a clear sentence before any connection.
     write_password(&password_file, None).unwrap();
-    checks.check("password removed", !password_file.exists(), json!(password_file.exists()));
+    checks.check(
+        "password removed",
+        !password_file.exists(),
+        json!(password_file.exists()),
+    );
     let no_password = send_report(&settings, &password_file, &report("error", None)).await;
     let text = no_password.err().unwrap_or_default();
     checks.check("no password saved", text.contains("no password is saved"), json!(text));
@@ -276,10 +359,21 @@ async fn live_email_notifications() {
     let bare_lf: Vec<usize> = sink
         .messages()
         .iter()
-        .map(|m| m.data.windows(2).filter(|w| w[1] == b'\n' && w[0] != b'\r').count() + usize::from(m.data.first() == Some(&b'\n')))
+        .map(|m| {
+            m.data.windows(2).filter(|w| w[1] == b'\n' && w[0] != b'\r').count()
+                + usize::from(m.data.first() == Some(&b'\n'))
+        })
         .collect();
-    checks.check("no bare LF in any message", bare_lf.iter().all(|n| *n == 0), json!(bare_lf));
-    checks.check("sink received exactly the three expected emails", sink.messages().len() == 3, json!(sink.messages().len()));
+    checks.check(
+        "no bare LF in any message",
+        bare_lf.iter().all(|n| *n == 0),
+        json!(bare_lf),
+    );
+    checks.check(
+        "sink received exactly the three expected emails",
+        sink.messages().len() == 3,
+        json!(sink.messages().len()),
+    );
 
     let summary = json!({
         "test": "live_email_notifications",
@@ -287,10 +381,19 @@ async fn live_email_notifications() {
         "failedChecks": checks.failed,
         "checks": checks.entries,
     });
-    std::fs::write(artifacts.join("report.json"), serde_json::to_vec_pretty(&summary).unwrap()).unwrap();
+    std::fs::write(
+        artifacts.join("report.json"),
+        serde_json::to_vec_pretty(&summary).unwrap(),
+    )
+    .unwrap();
     println!("artifacts: {}", artifacts.display());
     let _ = std::fs::remove_dir_all(&work);
-    assert_eq!(checks.failed, 0, "some checks failed; see {}", artifacts.join("report.json").display());
+    assert_eq!(
+        checks.failed,
+        0,
+        "some checks failed; see {}",
+        artifacts.join("report.json").display()
+    );
 }
 
 /// The message text with quoted-printable soft line breaks and `=XX` escapes undone, enough to look

@@ -45,11 +45,20 @@ pub struct DaemonInfo {
 #[serde(tag = "state", rename_all = "camelCase")]
 pub enum DaemonEvent {
     NotInstalled,
-    Starting { version: String },
-    Running { info: DaemonInfo },
+    Starting {
+        version: String,
+    },
+    Running {
+        info: DaemonInfo,
+    },
     Stopped,
-    Exited { code: Option<i32>, stderr_tail: Vec<String> },
-    Failed { message: String },
+    Exited {
+        code: Option<i32>,
+        stderr_tail: Vec<String>,
+    },
+    Failed {
+        message: String,
+    },
 }
 
 /// Written to `daemon.json` so a daemon left behind by a crashed session can be
@@ -71,7 +80,10 @@ pub fn now_unix() -> u64 {
 }
 
 pub fn now_unix_ms() -> u128 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0)
 }
 
 fn free_port() -> AppResult<u16> {
@@ -116,11 +128,7 @@ pub(super) fn spawn_rcd(
 ) -> AppResult<Spawned> {
     let port = free_port()?;
     let user = "arcus".to_string();
-    let pass = format!(
-        "{}{}",
-        uuid::Uuid::new_v4().simple(),
-        uuid::Uuid::new_v4().simple()
-    );
+    let pass = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
 
     let mut cmd = Command::new(binary);
     cmd.arg("rcd")
@@ -185,9 +193,9 @@ pub(super) fn spawn_rcd(
         });
     }
 
-    let mut child = cmd.spawn().map_err(|e| {
-        AppError::msg(format!("failed to start rclone rcd ({}): {e}", binary.display()))
-    })?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| AppError::msg(format!("failed to start rclone rcd ({}): {e}", binary.display())))?;
     let pid = child.id();
 
     let stderr_tail: Arc<StdMutex<VecDeque<String>>> = Arc::default();
@@ -236,7 +244,11 @@ pub(super) async fn wait_ready(spawned: &mut Spawned, client: &RcClient, timeout
             return Ok(());
         }
         // rclone usually answers within a few hundred ms, and every transfer waits for this.
-        let pause = if started.elapsed() < Duration::from_secs(2) { 50 } else { 200 };
+        let pause = if started.elapsed() < Duration::from_secs(2) {
+            50
+        } else {
+            200
+        };
         tokio::time::sleep(Duration::from_millis(pause)).await;
     }
     let _ = spawned.child.start_kill();
@@ -256,7 +268,10 @@ pub(super) enum Stop {
 
 /// Wait for the daemon's process to exit, acting on stop requests on the way. Returns its exit status
 /// and whether it was asked to stop. A dropped sender kills the process, as `kill_on_drop` would.
-pub(super) async fn supervise(child: &mut Child, mut stop_rx: UnboundedReceiver<Stop>) -> (std::io::Result<std::process::ExitStatus>, bool) {
+pub(super) async fn supervise(
+    child: &mut Child,
+    mut stop_rx: UnboundedReceiver<Stop>,
+) -> (std::io::Result<std::process::ExitStatus>, bool) {
     let mut asked = false;
     loop {
         tokio::select! {
@@ -336,9 +351,7 @@ async fn cleanup_stale(paths: &AppPaths) {
     let Ok(client) = RcClient::new(record.port, record.user, record.pass) else {
         return;
     };
-    if let Ok(Ok(_)) =
-        tokio::time::timeout(Duration::from_secs(3), client.call("core/quit", &json!({}))).await
-    {
+    if let Ok(Ok(_)) = tokio::time::timeout(Duration::from_secs(3), client.call("core/quit", &json!({}))).await {
         log::info!("asked stale rclone rcd on port {} to quit", record.port);
     }
 }
@@ -445,10 +458,7 @@ impl Daemon {
                 let (status, _) = supervise(&mut child, stop_rx).await;
                 let code = status.ok().and_then(|s| s.code());
                 let _ = tokio::fs::remove_file(&daemon_file).await;
-                app.state::<crate::AppState>()
-                    .daemon
-                    .on_exit(generation)
-                    .await;
+                app.state::<crate::AppState>().daemon.on_exit(generation).await;
                 if expected_exit.load(Ordering::SeqCst) {
                     let _ = app.emit(DAEMON_EVENT, DaemonEvent::Stopped);
                 } else {

@@ -50,7 +50,8 @@ pub fn load(path: &Path, now: u64) -> WatchFile {
         for run in runs.iter_mut().filter(|r| r.status == "running") {
             run.status = "lost".into();
             run.finished_at_unix.get_or_insert(now);
-            run.error.get_or_insert_with(|| "Arcus quit while this ran, so its result is unknown.".into());
+            run.error
+                .get_or_insert_with(|| "Arcus quit while this ran, so its result is unknown.".into());
         }
         runs.truncate(HISTORY_MAX);
     }

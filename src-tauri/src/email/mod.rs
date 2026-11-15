@@ -13,9 +13,9 @@ mod message;
 mod transport;
 
 #[cfg(test)]
-pub mod test_smtp;
-#[cfg(test)]
 mod live_test;
+#[cfg(test)]
+pub mod test_smtp;
 
 use crate::error::{AppError, AppResult};
 use crate::settings::EmailSettings;
@@ -89,7 +89,10 @@ pub fn read_password(password_file: &Path) -> Option<String> {
         Ok(_) => None,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
         Err(err) => {
-            log::warn!("could not read the SMTP password file {}: {err}", password_file.display());
+            log::warn!(
+                "could not read the SMTP password file {}: {err}",
+                password_file.display()
+            );
             None
         }
     }
@@ -119,7 +122,10 @@ pub fn write_password(password_file: &Path, password: Option<&str>) -> std::io::
 }
 
 fn now_unix() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 /// Whether a job that ended with `status` sends an email under `policy` (never, failure, always).

@@ -10,11 +10,11 @@
 //! The Tauri commands below are thin wrappers over the engine in `AppState`.
 
 mod engine;
+#[cfg(test)]
+mod live_test;
 mod rules;
 mod run;
 mod store;
-#[cfg(test)]
-mod live_test;
 
 use crate::email::JobReport;
 use crate::error::AppResult;

@@ -75,10 +75,7 @@ impl Serialize for AppError {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let (status, path, input) = match self {
             Self::Rc {
-                path,
-                status,
-                input,
-                ..
+                path, status, input, ..
             } => (Some(*status), Some(path.as_str()), input.as_ref()),
             _ => (None, None, None),
         };

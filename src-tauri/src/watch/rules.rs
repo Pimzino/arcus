@@ -142,7 +142,12 @@ pub fn validate(mut rule: WatchRule) -> AppResult<WatchRule> {
     rule.source = rule.source.trim().to_string();
     rule.destination = rule.destination.trim().to_string();
     rule.action = rule.action.trim().to_ascii_lowercase();
-    rule.excludes = rule.excludes.iter().map(|e| e.trim().to_string()).filter(|e| !e.is_empty()).collect();
+    rule.excludes = rule
+        .excludes
+        .iter()
+        .map(|e| e.trim().to_string())
+        .filter(|e| !e.is_empty())
+        .collect();
     rule.bwlimit = rule.bwlimit.map(|b| b.trim().to_string()).filter(|b| !b.is_empty());
     // Excludes live in their own field because the watcher reads them too; ones written into the filter
     // by hand join them.
@@ -156,7 +161,9 @@ pub fn validate(mut rule: WatchRule) -> AppResult<WatchRule> {
     }
     // Rules saved before the filter existed kept the minimum age in seconds.
     if let Some(seconds) = rule.min_age_seconds.take().filter(|&s| s > 0) {
-        rule.filter.entry("MinAge").or_insert_with(|| serde_json::json!(format!("{seconds}s")));
+        rule.filter
+            .entry("MinAge")
+            .or_insert_with(|| serde_json::json!(format!("{seconds}s")));
     }
     drop_empty(&mut rule.config);
     drop_empty(&mut rule.filter);
@@ -198,7 +205,9 @@ pub fn validate(mut rule: WatchRule) -> AppResult<WatchRule> {
         }
     }
     let both_local = is_local(&rule.source) && is_local(&rule.destination);
-    if rule.source == rule.destination || (both_local && comparable(&resolved(&rule.source)) == comparable(&resolved(&rule.destination))) {
+    if rule.source == rule.destination
+        || (both_local && comparable(&resolved(&rule.source)) == comparable(&resolved(&rule.destination)))
+    {
         return Err(AppError::msg("The source and the destination are the same folder."));
     }
     if rule.on_change {
@@ -232,7 +241,9 @@ pub fn validate(mut rule: WatchRule) -> AppResult<WatchRule> {
         }
     }
     if rule.settle_seconds < 2 {
-        return Err(AppError::msg("Wait at least 2 seconds after the last change before running."));
+        return Err(AppError::msg(
+            "Wait at least 2 seconds after the last change before running.",
+        ));
     }
     if rule.interval_minutes == Some(0) {
         return Err(AppError::msg("A schedule has to be at least 1 minute apart."));
@@ -241,19 +252,33 @@ pub fn validate(mut rule: WatchRule) -> AppResult<WatchRule> {
         return Err(AppError::msg("Max delete is a percentage: 0 to 100."));
     }
     if !CONFLICT_CHOICES.contains(&rule.conflict_resolve.as_str()) {
-        return Err(AppError::msg(format!("“{}” is not a way to resolve bisync conflicts.", rule.conflict_resolve)));
+        return Err(AppError::msg(format!(
+            "“{}” is not a way to resolve bisync conflicts.",
+            rule.conflict_resolve
+        )));
     }
     if !RESYNC_CHOICES.contains(&rule.resync_mode.as_str()) {
-        return Err(AppError::msg(format!("“{}” is not a way for bisync to resync.", rule.resync_mode)));
+        return Err(AppError::msg(format!(
+            "“{}” is not a way for bisync to resync.",
+            rule.resync_mode
+        )));
     }
-    if let Some(key) = rule.config.keys().chain(rule.filter.keys()).find(|k| k.trim().is_empty() || k.starts_with('_')) {
+    if let Some(key) = rule
+        .config
+        .keys()
+        .chain(rule.filter.keys())
+        .find(|k| k.trim().is_empty() || k.starts_with('_'))
+    {
         return Err(AppError::msg(format!("“{key}” is not an rclone option name.")));
     }
     if !LOG_CHOICES.contains(&rule.log.as_str()) {
         return Err(AppError::msg(format!("“{}” is not a log level.", rule.log)));
     }
     if !NOTIFY_CHOICES.contains(&rule.notify.as_str()) {
-        return Err(AppError::msg(format!("“{}” is not an email choice (never, failure or always).", rule.notify)));
+        return Err(AppError::msg(format!(
+            "“{}” is not an email choice (never, failure or always).",
+            rule.notify
+        )));
     }
     Ok(rule)
 }

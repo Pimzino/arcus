@@ -32,13 +32,11 @@ pub fn fingerprint_hex(key: &SignedPublicKey) -> String {
 
 /// Parse the embedded keyring and keep only the pinned keys.
 pub fn load_trusted_keys() -> AppResult<Vec<SignedPublicKey>> {
-    let (iter, _headers) =
-        SignedPublicKey::from_armor_many(Cursor::new(RCLONE_KEYS_ARMORED.as_bytes()))
-            .map_err(|e| AppError::Verification(format!("cannot parse embedded rclone keys: {e}")))?;
+    let (iter, _headers) = SignedPublicKey::from_armor_many(Cursor::new(RCLONE_KEYS_ARMORED.as_bytes()))
+        .map_err(|e| AppError::Verification(format!("cannot parse embedded rclone keys: {e}")))?;
     let mut keys = Vec::new();
     for key in iter {
-        let key = key
-            .map_err(|e| AppError::Verification(format!("cannot parse embedded rclone key: {e}")))?;
+        let key = key.map_err(|e| AppError::Verification(format!("cannot parse embedded rclone key: {e}")))?;
         let fp = fingerprint_hex(&key);
         if TRUSTED_FINGERPRINTS.contains(&fp.as_str()) {
             keys.push(key);
@@ -63,9 +61,8 @@ pub struct VerifiedSums {
 
 /// Verify a PGP clear-signed `SHA256SUMS` document and return its entries.
 pub fn verify_signed_sums(armored: &str) -> AppResult<VerifiedSums> {
-    let (message, _headers) = CleartextSignedMessage::from_string(armored).map_err(|e| {
-        AppError::Verification(format!("SHA256SUMS is not a valid PGP clear-signed message: {e}"))
-    })?;
+    let (message, _headers) = CleartextSignedMessage::from_string(armored)
+        .map_err(|e| AppError::Verification(format!("SHA256SUMS is not a valid PGP clear-signed message: {e}")))?;
     let keys = load_trusted_keys()?;
     let signer = keys
         .iter()
@@ -73,8 +70,7 @@ pub fn verify_signed_sums(armored: &str) -> AppResult<VerifiedSums> {
         .map(fingerprint_hex)
         .ok_or_else(|| {
             AppError::Verification(
-                "the SHA256SUMS signature does not verify against any trusted rclone release key"
-                    .into(),
+                "the SHA256SUMS signature does not verify against any trusted rclone release key".into(),
             )
         })?;
     let entries = parse_sums(&message.signed_text());

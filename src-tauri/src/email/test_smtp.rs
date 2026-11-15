@@ -206,7 +206,9 @@ async fn serve(
                         }
                     }
                     _ => {
-                        write.write_all(b"504 5.5.4 Unrecognized authentication type\r\n").await?;
+                        write
+                            .write_all(b"504 5.5.4 Unrecognized authentication type\r\n")
+                            .await?;
                         continue;
                     }
                 };
@@ -292,7 +294,10 @@ async fn read_line<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R) -> std::i
 fn angle_address(line: &str) -> String {
     match (line.find('<'), line.find('>')) {
         (Some(start), Some(end)) if start < end => line[start + 1..end].to_string(),
-        _ => line.split_once(':').map(|(_, rest)| rest.trim().to_string()).unwrap_or_default(),
+        _ => line
+            .split_once(':')
+            .map(|(_, rest)| rest.trim().to_string())
+            .unwrap_or_default(),
     }
 }
 
