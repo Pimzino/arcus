@@ -45,7 +45,7 @@ const TARGET = resolve("src-tauri/target/e2e-macos");
 const IDENTIFIER = "com.arcus.e2e";
 const RCLONE =
   process.env.ARCUS_TEST_BINARY ??
-  join(process.env.HOME, "Library/Application Support/com.rclonegui.desktop/bin", newestRclone(), "rclone");
+  join(process.env.HOME, "Library/Application Support/Arcus/bin", newestRclone(), "rclone");
 const TAURI = join(ROOT, "node_modules/.bin/tauri");
 
 if (process.platform !== "darwin") {
@@ -54,7 +54,7 @@ if (process.platform !== "darwin") {
 }
 
 function newestRclone() {
-  const dir = join(process.env.HOME, "Library/Application Support/com.rclonegui.desktop/bin");
+  const dir = join(process.env.HOME, "Library/Application Support/Arcus/bin");
   const versions = existsSync(dir) ? readdirSync(dir).filter((d) => d.startsWith("v")).sort() : [];
   return versions.at(-1) ?? "none";
 }
@@ -202,7 +202,7 @@ await new Promise((r) => server.listen(port, "127.0.0.1", r));
 
 function newHome(name, settings, watches) {
   const home = join(work, name);
-  const data = join(home, "Library/Application Support", IDENTIFIER);
+  const data = join(home, "Library/Application Support/Arcus");
   mkdirSync(data, { recursive: true });
   writeFileSync(
     join(data, "settings.json"),
@@ -211,7 +211,7 @@ function newHome(name, settings, watches) {
   // Skip the first-run permissions guide; it has nothing to do with this test.
   mkdirSync(join(data, "store"), { recursive: true });
   if (watches) writeFileSync(join(data, "watches.json"), JSON.stringify(watches, null, 2));
-  return { home, data, log: join(home, "Library/Logs", IDENTIFIER, "arcus.log") };
+  return { home, data, log: join(home, "Library/Logs/Arcus/arcus.log") };
 }
 
 function launch(app, home, extraEnv) {

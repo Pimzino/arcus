@@ -3,7 +3,7 @@
 //! window: the engine runs against `TestHost`, which is what `AppHost` is inside the app.
 //!
 //! ```sh
-//! ARCUS_TEST_BINARY=~/Library/Application\ Support/com.rclonegui.desktop/bin/v1.75.1/rclone \
+//! ARCUS_TEST_BINARY=~/Library/Application\ Support/Arcus/bin/v1.75.1/rclone \
 //!   cargo test --lib -- --ignored live_watch --nocapture
 //! ```
 //!
@@ -95,9 +95,18 @@ impl Host for TestHost {
         // The same path as `email::notify` in the app, minus the AppHandle it records its status in.
         let settings = self.settings().email;
         let emails = self.emails.clone();
-        email::notify_with(&settings, &email::password_path(&self.paths.data_dir), report, policy, move |report, result| {
-            emails.lock().unwrap().push((report.title.clone(), report.status.clone(), result));
-        });
+        email::notify_with(
+            &settings,
+            &email::password_path(&self.paths.data_dir),
+            report,
+            policy,
+            move |report, result| {
+                emails
+                    .lock()
+                    .unwrap()
+                    .push((report.title.clone(), report.status.clone(), result));
+            },
+        );
     }
     fn refresh_tray(&self) {
         self.tray_refreshes.fetch_add(1, Ordering::SeqCst);
@@ -106,7 +115,13 @@ impl Host for TestHost {
 
 impl TestHost {
     fn events_named(&self, name: &str) -> Vec<Recorded> {
-        self.events.lock().unwrap().iter().filter(|e| e.event == name).cloned().collect()
+        self.events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|e| e.event == name)
+            .cloned()
+            .collect()
     }
 }
 
@@ -121,7 +136,8 @@ impl Report {
     fn check(&mut self, name: &str, ok: bool, observed: Value) -> bool {
         let at = self.t0.elapsed().as_secs_f64();
         println!("[{at:7.2}s] {} {name}: {observed}", if ok { "ok  " } else { "FAIL" });
-        self.checks.push(json!({ "check": name, "ok": ok, "observed": observed, "atSeconds": at }));
+        self.checks
+            .push(json!({ "check": name, "ok": ok, "observed": observed, "atSeconds": at }));
         if !ok {
             self.failures.push(format!("{name}: {observed}"));
         }
@@ -144,7 +160,11 @@ async fn wait_until(timeout: Duration, mut cond: impl FnMut() -> bool) -> Option
 }
 
 fn finished_runs(engine: &WatchEngine, id: &str) -> Vec<WatchRun> {
-    engine.history(id).into_iter().filter(|r| r.status != "running").collect()
+    engine
+        .history(id)
+        .into_iter()
+        .filter(|r| r.status != "running")
+        .collect()
 }
 
 /// Wait until the rule has `count` finished runs and nothing running; returns its history (newest first).
@@ -227,9 +247,7 @@ fn live_watch_end_to_end() {
 }
 
 async fn scenario() {
-    let binary = PathBuf::from(
-        std::env::var("ARCUS_TEST_BINARY").expect("set ARCUS_TEST_BINARY to an rclone binary"),
-    );
+    let binary = PathBuf::from(std::env::var("ARCUS_TEST_BINARY").expect("set ARCUS_TEST_BINARY to an rclone binary"));
     assert!(binary.exists(), "{} does not exist", binary.display());
     // `$ARCUS_E2E_ARTIFACTS` is shared by every live test (the email one writes to its `email/`), and this
     // folder is emptied first, so the test only ever empties its own `watch/` inside it.
@@ -271,19 +289,37 @@ async fn scenario() {
     let engine_host: HostRef = host.clone();
     host.engine.start(engine_host);
     let engine = &host.engine;
-    let mut report = Report { t0: Instant::now(), checks: Vec::new(), failures: Vec::new() };
-    report.check("engine starts empty", engine.list().watches.is_empty(), json!(engine.list().watches.len()));
+    let mut report = Report {
+        t0: Instant::now(),
+        checks: Vec::new(),
+        failures: Vec::new(),
+    };
+    report.check(
+        "engine starts empty",
+        engine.list().watches.is_empty(),
+        json!(engine.list().watches.len()),
+    );
 
     // ----- 1. validation -----
     let (src_a, dst_a) = (dir("copy-src"), dir("copy-dst"));
     let inside = rule("inside", "copy", &src_a, &src_a.join("backup"));
-    let remote = WatchRule { source: "gdrive:Photos".into(), ..rule("remote", "copy", &src_a, &dst_a) };
-    let short = WatchRule { settle_seconds: 1, ..rule("short", "copy", &src_a, &dst_a) };
+    let remote = WatchRule {
+        source: "gdrive:Photos".into(),
+        ..rule("remote", "copy", &src_a, &dst_a)
+    };
+    let short = WatchRule {
+        settle_seconds: 1,
+        ..rule("short", "copy", &src_a, &dst_a)
+    };
     let unnamed = rule("  ", "copy", &src_a, &dst_a);
     let missing = rule("missing", "copy", &scratch.join("nope"), &dst_a);
     for (label, candidate, expect) in [
         ("destination inside the source is refused", inside, "inside the source"),
-        ("a remote cannot be watched for changes", remote, "Only a folder on this computer"),
+        (
+            "a remote cannot be watched for changes",
+            remote,
+            "Only a folder on this computer",
+        ),
         ("settle below 2 s is refused", short, "at least 2 seconds"),
         ("a name is required", unnamed, "name"),
         ("a missing source folder is refused", missing, "does not exist"),
@@ -302,9 +338,17 @@ async fn scenario() {
             ..rule("Copy photos", "copy", &src_a, &dst_a)
         })
         .expect("save the copy rule");
-    report.check("saved rule gets an id and a creation time", !copy.id.is_empty() && copy.created_at_unix > 0, json!({ "id": copy.id, "createdAtUnix": copy.created_at_unix }));
+    report.check(
+        "saved rule gets an id and a creation time",
+        !copy.id.is_empty() && copy.created_at_unix > 0,
+        json!({ "id": copy.id, "createdAtUnix": copy.created_at_unix }),
+    );
     let attached = wait_until(Duration::from_secs(10), || engine.is_watching(&copy.id)).await;
-    report.check("copy watcher attaches", attached.is_some(), json!(attached.map(|d| d.as_millis())));
+    report.check(
+        "copy watcher attaches",
+        attached.is_some(),
+        json!(attached.map(|d| d.as_millis())),
+    );
     // FSEvents starts its stream asynchronously; a moment later nothing written is missed.
     tokio::time::sleep(Duration::from_millis(500)).await;
     write(&src_a.join("a.txt"), b"first file\n");
@@ -312,30 +356,69 @@ async fn scenario() {
     write(&src_a.join("c.tmp"), b"excluded\n");
     let last_write = Instant::now();
     let waiting = wait_until(Duration::from_secs(5), || state_of(engine, &copy.id).0 == "waiting").await;
-    let status = engine.list().watches.into_iter().find(|w| w.rule.id == copy.id).unwrap();
-    report.check("a change puts the rule in waiting with a run time", waiting.is_some() && status.run_at_unix.is_some(), json!({ "state": status.state, "runAtUnix": status.run_at_unix }));
-    let runs = wait_runs(engine, &copy.id, 1, Duration::from_secs(30)).await.unwrap_or_default();
+    let status = engine
+        .list()
+        .watches
+        .into_iter()
+        .find(|w| w.rule.id == copy.id)
+        .unwrap();
+    report.check(
+        "a change puts the rule in waiting with a run time",
+        waiting.is_some() && status.run_at_unix.is_some(),
+        json!({ "state": status.state, "runAtUnix": status.run_at_unix }),
+    );
+    let runs = wait_runs(engine, &copy.id, 1, Duration::from_secs(30))
+        .await
+        .unwrap_or_default();
     let first = runs.first().cloned().unwrap_or_default();
     let settle_observed = first.started_at_unix as f64 - (now_unix_f64() - last_write.elapsed().as_secs_f64());
-    report.check("copy runs after the change", first.status == "success" && first.trigger == "change", run_json(&first));
-    report.check("the run waits for the settle time (≥ 2 s after the last write, ±1 s of clock rounding)", settle_observed >= 1.0, json!({ "secondsAfterLastWrite": settle_observed }));
+    report.check(
+        "copy runs after the change",
+        first.status == "success" && first.trigger == "change",
+        run_json(&first),
+    );
+    report.check(
+        "the run waits for the settle time (≥ 2 s after the last write, ±1 s of clock rounding)",
+        settle_observed >= 1.0,
+        json!({ "secondsAfterLastWrite": settle_observed }),
+    );
     report.check(
         "copied: a.txt and sub/b.txt, not c.tmp",
         dst_a.join("a.txt").is_file() && dst_a.join("sub/b.txt").is_file() && !dst_a.join("c.tmp").exists(),
         json!({ "a.txt": dst_a.join("a.txt").is_file(), "sub/b.txt": dst_a.join("sub/b.txt").is_file(), "c.tmp": dst_a.join("c.tmp").exists() }),
     );
-    report.check("run counts come from rclone's stats", first.transfers == 2 && first.bytes > 0, json!({ "transfers": first.transfers, "bytes": first.bytes }));
-    report.check("the run has a daemon, a job id and a log", first.daemon_id.is_some() && first.jobid.is_some() && first.log_path.as_deref().is_some_and(|p| Path::new(p).is_file()), run_json(&first));
+    report.check(
+        "run counts come from rclone's stats",
+        first.transfers == 2 && first.bytes > 0,
+        json!({ "transfers": first.transfers, "bytes": first.bytes }),
+    );
+    report.check(
+        "the run has a daemon, a job id and a log",
+        first.daemon_id.is_some()
+            && first.jobid.is_some()
+            && first.log_path.as_deref().is_some_and(|p| Path::new(p).is_file()),
+        run_json(&first),
+    );
 
     // A change to an excluded file alone does not run the rule.
     tokio::time::sleep(Duration::from_millis(300)).await;
     write(&src_a.join("only.tmp"), b"excluded again\n");
     tokio::time::sleep(Duration::from_secs(4)).await;
-    report.check("a change to an excluded file alone does not run", finished_runs(engine, &copy.id).len() == 1 && state_of(engine, &copy.id).0 == "idle", json!({ "runs": finished_runs(engine, &copy.id).len(), "state": state_of(engine, &copy.id).0 }));
+    report.check(
+        "a change to an excluded file alone does not run",
+        finished_runs(engine, &copy.id).len() == 1 && state_of(engine, &copy.id).0 == "idle",
+        json!({ "runs": finished_runs(engine, &copy.id).len(), "state": state_of(engine, &copy.id).0 }),
+    );
 
     write(&src_a.join("d.txt"), b"second change\n");
-    let runs = wait_runs(engine, &copy.id, 2, Duration::from_secs(30)).await.unwrap_or_default();
-    report.check("a second change runs again", runs.len() == 2 && dst_a.join("d.txt").is_file(), json!({ "runs": runs.len(), "d.txt": dst_a.join("d.txt").is_file() }));
+    let runs = wait_runs(engine, &copy.id, 2, Duration::from_secs(30))
+        .await
+        .unwrap_or_default();
+    report.check(
+        "a second change runs again",
+        runs.len() == 2 && dst_a.join("d.txt").is_file(),
+        json!({ "runs": runs.len(), "d.txt": dst_a.join("d.txt").is_file() }),
+    );
 
     // A change while it runs: 6 MiB at 2 MiB/s keeps the run going for about 3 s.
     write(&src_a.join("e.bin"), &vec![7u8; 6 * 1024 * 1024]);
@@ -343,46 +426,77 @@ async fn scenario() {
     tokio::time::sleep(Duration::from_millis(300)).await;
     write(&src_a.join("f.txt"), b"written during a run\n");
     let still_running = state_of(engine, &copy.id).0 == "running";
-    let runs = wait_runs(engine, &copy.id, 4, Duration::from_secs(40)).await.unwrap_or_default();
-    let (during, after) = (runs.get(1).cloned().unwrap_or_default(), runs.first().cloned().unwrap_or_default());
+    let runs = wait_runs(engine, &copy.id, 4, Duration::from_secs(40))
+        .await
+        .unwrap_or_default();
+    let (during, after) = (
+        runs.get(1).cloned().unwrap_or_default(),
+        runs.first().cloned().unwrap_or_default(),
+    );
     report.check(
         "a change during a run runs the rule once more after it",
         running.is_some() && still_running && runs.len() == 4 && after.started_at_unix >= during.finished_at_unix.unwrap_or(u64::MAX) && dst_a.join("f.txt").is_file(),
         json!({ "sawRunning": running.is_some(), "writtenWhileRunning": still_running, "runs": runs.len(), "duringRun": run_json(&during), "nextRun": run_json(&after), "f.txt": dst_a.join("f.txt").is_file() }),
     );
-    report.check("the bandwidth limit slows the big run (≥ 2 s for 6 MiB at 2 MiB/s)", during.finished_at_unix.unwrap_or(0).saturating_sub(during.started_at_unix) >= 2, run_json(&during));
+    report.check(
+        "the bandwidth limit slows the big run (≥ 2 s for 6 MiB at 2 MiB/s)",
+        during
+            .finished_at_unix
+            .unwrap_or(0)
+            .saturating_sub(during.started_at_unix)
+            >= 2,
+        run_json(&during),
+    );
 
     // ----- 3. sync on change -----
     let (src_s, dst_s) = (dir("sync-src"), dir("sync-dst"));
     write(&dst_s.join("stale.txt"), b"only at the destination\n");
-    let sync = engine.save(rule("Sync docs", "sync", &src_s, &dst_s)).expect("save the sync rule");
+    let sync = engine
+        .save(rule("Sync docs", "sync", &src_s, &dst_s))
+        .expect("save the sync rule");
     wait_until(Duration::from_secs(10), || engine.is_watching(&sync.id)).await;
     tokio::time::sleep(Duration::from_millis(500)).await;
     write(&src_s.join("s1.txt"), b"sync me\n");
-    let runs = wait_runs(engine, &sync.id, 1, Duration::from_secs(30)).await.unwrap_or_default();
+    let runs = wait_runs(engine, &sync.id, 1, Duration::from_secs(30))
+        .await
+        .unwrap_or_default();
     report.check(
         "sync mirrors the source (s1.txt there, stale.txt deleted)",
         runs.first().is_some_and(|r| r.status == "success" && r.deletes == 1) && dst_s.join("s1.txt").is_file() && !dst_s.join("stale.txt").exists(),
         json!({ "run": runs.first().map(run_json), "s1.txt": dst_s.join("s1.txt").is_file(), "stale.txt": dst_s.join("stale.txt").exists() }),
     );
     std::fs::remove_file(src_s.join("s1.txt")).unwrap();
-    let runs = wait_runs(engine, &sync.id, 2, Duration::from_secs(30)).await.unwrap_or_default();
-    report.check("a deletion in the source runs a sync, which deletes at the destination", runs.len() == 2 && !dst_s.join("s1.txt").exists(), json!({ "runs": runs.len(), "s1.txt": dst_s.join("s1.txt").exists() }));
+    let runs = wait_runs(engine, &sync.id, 2, Duration::from_secs(30))
+        .await
+        .unwrap_or_default();
+    report.check(
+        "a deletion in the source runs a sync, which deletes at the destination",
+        runs.len() == 2 && !dst_s.join("s1.txt").exists(),
+        json!({ "runs": runs.len(), "s1.txt": dst_s.join("s1.txt").exists() }),
+    );
 
     // ----- 4. move on change -----
     let (src_m, dst_m) = (dir("move-src"), dir("move-dst"));
-    let mv = engine.save(rule("Move inbox", "move", &src_m, &dst_m)).expect("save the move rule");
+    let mv = engine
+        .save(rule("Move inbox", "move", &src_m, &dst_m))
+        .expect("save the move rule");
     wait_until(Duration::from_secs(10), || engine.is_watching(&mv.id)).await;
     tokio::time::sleep(Duration::from_millis(500)).await;
     write(&src_m.join("m1.txt"), b"move me\n");
-    let runs = wait_runs(engine, &mv.id, 1, Duration::from_secs(30)).await.unwrap_or_default();
+    let runs = wait_runs(engine, &mv.id, 1, Duration::from_secs(30))
+        .await
+        .unwrap_or_default();
     report.check(
         "move moves the file",
         runs.first().is_some_and(|r| r.status == "success") && dst_m.join("m1.txt").is_file() && !src_m.join("m1.txt").exists(),
         json!({ "run": runs.first().map(run_json), "dst": dst_m.join("m1.txt").is_file(), "src": src_m.join("m1.txt").exists() }),
     );
     tokio::time::sleep(Duration::from_secs(5)).await;
-    report.check("the move's own deletions do not set off another move", engine.history(&mv.id).len() == 1 && state_of(engine, &mv.id).0 == "idle", json!({ "runs": engine.history(&mv.id).len(), "state": state_of(engine, &mv.id).0 }));
+    report.check(
+        "the move's own deletions do not set off another move",
+        engine.history(&mv.id).len() == 1 && state_of(engine, &mv.id).0 == "idle",
+        json!({ "runs": engine.history(&mv.id).len(), "state": state_of(engine, &mv.id).0 }),
+    );
 
     // ----- 5. check that finds a difference -----
     let (src_c, dst_c) = (dir("check-src"), dir("check-dst"));
@@ -391,19 +505,31 @@ async fn scenario() {
     write(&src_c.join("differs.txt"), b"source version\n");
     write(&dst_c.join("differs.txt"), b"destination version, longer\n");
     let check = engine
-        .save(WatchRule { on_change: false, notify: "failure".into(), ..rule("Check archive", "check", &src_c, &dst_c) })
+        .save(WatchRule {
+            on_change: false,
+            notify: "failure".into(),
+            ..rule("Check archive", "check", &src_c, &dst_c)
+        })
         .expect("save the check rule");
     let emails_before_check = sink.messages().len();
     engine.run_now(&check.id).expect("run the check");
-    let runs = wait_runs(engine, &check.id, 1, Duration::from_secs(30)).await.unwrap_or_default();
+    let runs = wait_runs(engine, &check.id, 1, Duration::from_secs(30))
+        .await
+        .unwrap_or_default();
     let check_run = runs.first().cloned().unwrap_or_default();
     report.check(
         "a check with a difference ends in error",
-        check_run.status == "error" && check_run.trigger == "manual" && check_run.error.as_deref().is_some_and(|e| e.contains("differences")),
+        check_run.status == "error"
+            && check_run.trigger == "manual"
+            && check_run.error.as_deref().is_some_and(|e| e.contains("differences")),
         run_json(&check_run),
     );
     let got = sink.wait_for(emails_before_check + 1, Duration::from_secs(15)).await;
-    let check_mail = got.as_ref().ok().and_then(|m| m.iter().find(|m| m.subject().unwrap_or_default().contains("Check archive")).cloned());
+    let check_mail = got.as_ref().ok().and_then(|m| {
+        m.iter()
+            .find(|m| m.subject().unwrap_or_default().contains("Check archive"))
+            .cloned()
+    });
     report.check(
         "the failed check emails (policy failure), with its log attached",
         check_mail.as_ref().is_some_and(|m| m.subject().unwrap_or_default().contains("found differences") && m.text().contains("Watch folder") && m.text().to_ascii_lowercase().contains("attachment")),
@@ -413,7 +539,11 @@ async fn scenario() {
     // ----- 6. pause and resume -----
     let copy_runs_before_pause = finished_runs(engine, &copy.id).len();
     engine.set_paused(true).unwrap();
-    report.check("paused: rules show paused", state_of(engine, &copy.id).0 == "paused" && engine.is_paused(), json!(state_of(engine, &copy.id)));
+    report.check(
+        "paused: rules show paused",
+        state_of(engine, &copy.id).0 == "paused" && engine.is_paused(),
+        json!(state_of(engine, &copy.id)),
+    );
     write(&src_a.join("paused-1.txt"), b"while paused\n");
     tokio::time::sleep(Duration::from_millis(500)).await;
     write(&src_a.join("paused-2.txt"), b"while paused\n");
@@ -425,7 +555,9 @@ async fn scenario() {
     );
     let resumed_at = now_unix_f64();
     engine.set_paused(false).unwrap();
-    let runs = wait_runs(engine, &copy.id, copy_runs_before_pause + 1, Duration::from_secs(30)).await.unwrap_or_default();
+    let runs = wait_runs(engine, &copy.id, copy_runs_before_pause + 1, Duration::from_secs(30))
+        .await
+        .unwrap_or_default();
     tokio::time::sleep(Duration::from_secs(5)).await;
     let after_resume = finished_runs(engine, &copy.id).len();
     report.check(
@@ -433,8 +565,16 @@ async fn scenario() {
         after_resume == copy_runs_before_pause + 1 && dst_a.join("paused-1.txt").is_file() && dst_a.join("paused-2.txt").is_file(),
         json!({ "runsAfterResume": after_resume - copy_runs_before_pause, "run": runs.first().map(run_json), "resumedAtUnix": resumed_at }),
     );
-    let paused_events: Vec<Value> = host.events_named(super::WATCH_PAUSED_EVENT).into_iter().map(|e| e.payload).collect();
-    report.check("watch:paused events", paused_events == vec![json!({ "paused": true }), json!({ "paused": false })], json!(paused_events));
+    let paused_events: Vec<Value> = host
+        .events_named(super::WATCH_PAUSED_EVENT)
+        .into_iter()
+        .map(|e| e.payload)
+        .collect();
+    report.check(
+        "watch:paused events",
+        paused_events == vec![json!({ "paused": true }), json!({ "paused": false })],
+        json!(paused_events),
+    );
 
     // ----- 7. at most three at once -----
     let mut many = Vec::new();
@@ -442,7 +582,10 @@ async fn scenario() {
         let (src, dst) = (dir(&format!("many-{i}-src")), dir(&format!("many-{i}-dst")));
         write(&src.join("big.bin"), &vec![i as u8; 4 * 1024 * 1024]);
         let saved = engine
-            .save(WatchRule { bwlimit: Some("2M".into()), ..rule(&format!("Many {i}"), "copy", &src, &dst) })
+            .save(WatchRule {
+                bwlimit: Some("2M".into()),
+                ..rule(&format!("Many {i}"), "copy", &src, &dst)
+            })
             .expect("save a concurrency rule");
         many.push(saved);
     }
@@ -454,17 +597,27 @@ async fn scenario() {
     let started = Instant::now();
     while started.elapsed() < Duration::from_secs(60) {
         let list = engine.list();
-        let ours: Vec<_> = list.watches.iter().filter(|w| many.iter().any(|m| m.id == w.rule.id)).collect();
+        let ours: Vec<_> = list
+            .watches
+            .iter()
+            .filter(|w| many.iter().any(|m| m.id == w.rule.id))
+            .collect();
         max_running = max_running.max(ours.iter().filter(|w| w.state == "running").count());
         if let Some(w) = ours.iter().find(|w| w.state == "waiting" && w.state_detail.is_some()) {
             saw_waiting_detail.get_or_insert(w.state_detail.clone().unwrap());
         }
-        if many.iter().all(|m| finished_runs(engine, &m.id).len() == 1 && engine.history(&m.id).iter().all(|r| r.status != "running")) {
+        if many.iter().all(|m| {
+            finished_runs(engine, &m.id).len() == 1 && engine.history(&m.id).iter().all(|r| r.status != "running")
+        }) {
             break;
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    let all_ok = many.iter().all(|m| finished_runs(engine, &m.id).first().is_some_and(|r| r.status == "success"));
+    let all_ok = many.iter().all(|m| {
+        finished_runs(engine, &m.id)
+            .first()
+            .is_some_and(|r| r.status == "success")
+    });
     report.check(
         "never more than three runs at once; the fourth waits",
         max_running == 3 && saw_waiting_detail.as_deref() == Some("Waiting for other watch folders") && all_ok,
@@ -473,36 +626,64 @@ async fn scenario() {
 
     // ----- 8. stop -----
     let stopper = &many[0];
-    write(&PathBuf::from(&stopper.source).join("huge.bin"), &vec![9u8; 16 * 1024 * 1024]);
+    write(
+        &PathBuf::from(&stopper.source).join("huge.bin"),
+        &vec![9u8; 16 * 1024 * 1024],
+    );
     engine.run_now(&stopper.id).unwrap();
-    let job_started = wait_until(Duration::from_secs(20), || engine.history(&stopper.id).first().is_some_and(|r| r.status == "running" && r.jobid.is_some())).await;
+    let job_started = wait_until(Duration::from_secs(20), || {
+        engine
+            .history(&stopper.id)
+            .first()
+            .is_some_and(|r| r.status == "running" && r.jobid.is_some())
+    })
+    .await;
     tokio::time::sleep(Duration::from_millis(800)).await;
     engine.stop(&stopper.id).unwrap();
-    let runs = wait_runs(engine, &stopper.id, 2, Duration::from_secs(30)).await.unwrap_or_default();
-    report.check("stop ends the running transfer as stopped", job_started.is_some() && runs.first().is_some_and(|r| r.status == "stopped"), json!(runs.first().map(run_json)));
+    let runs = wait_runs(engine, &stopper.id, 2, Duration::from_secs(30))
+        .await
+        .unwrap_or_default();
+    report.check(
+        "stop ends the running transfer as stopped",
+        job_started.is_some() && runs.first().is_some_and(|r| r.status == "stopped"),
+        json!(runs.first().map(run_json)),
+    );
 
     // ----- 9. delete -----
     let doomed = many[3].id.clone();
     engine.delete(&doomed).unwrap();
     let removed = host.events_named(super::WATCH_REMOVED_EVENT);
-    let file: WatchFile = serde_json::from_slice(&std::fs::read(store::file_path(&host.paths.data_dir)).unwrap()).unwrap();
+    let file: WatchFile =
+        serde_json::from_slice(&std::fs::read(store::file_path(&host.paths.data_dir)).unwrap()).unwrap();
     report.check(
         "delete: watch:removed, gone from the list, the file and the history",
-        removed.iter().any(|e| e.payload == json!({ "id": doomed })) && engine.list().watches.iter().all(|w| w.rule.id != doomed) && file.rules.iter().all(|r| r.id != doomed) && !file.history.contains_key(&doomed),
+        removed.iter().any(|e| e.payload == json!({ "id": doomed }))
+            && engine.list().watches.iter().all(|w| w.rule.id != doomed)
+            && file.rules.iter().all(|r| r.id != doomed)
+            && !file.history.contains_key(&doomed),
         json!({ "removedEvents": removed.iter().map(|e| e.payload.clone()).collect::<Vec<_>>() }),
     );
 
     // ----- history and jobs -----
     let history = engine.history(&copy.id);
     let newest_first = history.windows(2).all(|w| w[0].started_at_unix >= w[1].started_at_unix);
-    report.check("history lists runs newest first, with counts", !history.is_empty() && newest_first && history.iter().any(|r| r.transfers > 0), json!(history.iter().map(run_json).collect::<Vec<_>>()));
+    report.check(
+        "history lists runs newest first, with counts",
+        !history.is_empty() && newest_first && history.iter().any(|r| r.transfers > 0),
+        json!(history.iter().map(run_json).collect::<Vec<_>>()),
+    );
     let jobs = engine.jobs();
     let job_events = host.events_named(super::WATCH_JOB_EVENT);
     let running_events = job_events.iter().filter(|e| e.payload["status"] == "running").count();
     let final_events = job_events.iter().filter(|e| e.payload["status"] != "running").count();
     report.check(
         "watch:job events: one running and one final per transfer; watch_jobs lists them",
-        running_events > 0 && running_events == final_events && jobs.len() == running_events && jobs.iter().all(|j| j.status != "running" && j.stats.is_some() && j.activity.is_some()),
+        running_events > 0
+            && running_events == final_events
+            && jobs.len() == running_events
+            && jobs
+                .iter()
+                .all(|j| j.status != "running" && j.stats.is_some() && j.activity.is_some()),
         json!({ "running": running_events, "final": final_events, "watchJobs": jobs.len(), "sample": jobs.first() }),
     );
     let activity = host.events_named(crate::rclone::activity::ACTIVITY_EVENT).len();
@@ -513,7 +694,10 @@ async fn scenario() {
     let log = std::fs::read_to_string(first.log_path.clone().unwrap_or_default()).unwrap_or_default();
     report.check(
         "the log ends with an Arcus summary",
-        log.contains("===== Arcus summary =====") && log.contains("Job: Copy") && log.contains("Result: success") && log.contains("Transferred: "),
+        log.contains("===== Arcus summary =====")
+            && log.contains("Job: Copy")
+            && log.contains("Result: success")
+            && log.contains("Transferred: "),
         json!(log.split("===== Arcus summary =====").nth(1).unwrap_or("").trim()),
     );
 
@@ -521,10 +705,17 @@ async fn scenario() {
     let file_path = store::file_path(&host.paths.data_dir);
     let saved: WatchFile = serde_json::from_slice(&std::fs::read(&file_path).unwrap()).unwrap();
     let listed: Vec<WatchRule> = engine.list().watches.into_iter().map(|w| w.rule).collect();
-    report.check("watches.json holds the rules as the engine lists them", saved.rules == listed && saved.version == 1 && !saved.paused, json!({ "rules": saved.rules.len() }));
+    report.check(
+        "watches.json holds the rules as the engine lists them",
+        saved.rules == listed && saved.version == 1 && !saved.paused,
+        json!({ "rules": saved.rules.len() }),
+    );
     let _ = std::fs::copy(&file_path, artifacts.join("watches-first-engine.json"));
     // Nothing may still be running when the first engine goes away.
-    let idle = wait_until(Duration::from_secs(30), || engine.list().watches.iter().all(|w| w.running.is_none())).await;
+    let idle = wait_until(Duration::from_secs(30), || {
+        engine.list().watches.iter().all(|w| w.running.is_none())
+    })
+    .await;
     report.check("first engine is idle before the restart", idle.is_some(), json!(null));
     host.engine.shutdown();
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -558,7 +749,14 @@ async fn scenario() {
     );
     edited.history.entry(sync.id.clone()).or_default().insert(
         0,
-        WatchRun { id: "died-running".into(), watch_id: sync.id.clone(), trigger: "change".into(), started_at_unix: now - 60, status: "running".into(), ..Default::default() },
+        WatchRun {
+            id: "died-running".into(),
+            watch_id: sync.id.clone(),
+            trigger: "change".into(),
+            started_at_unix: now - 60,
+            status: "running".into(),
+            ..Default::default()
+        },
     );
     for r in edited.rules.iter_mut().filter(|r| r.id == copy.id) {
         r.run_on_start = true;
@@ -571,46 +769,89 @@ async fn scenario() {
     host2.engine.start(host2_ref);
     let engine2 = &host2.engine;
     let listed2: Vec<WatchRule> = engine2.list().watches.into_iter().map(|w| w.rule).collect();
-    report.check("second engine loads the same rules", listed2 == edited.rules, json!(listed2.iter().map(|r| &r.name).collect::<Vec<_>>()));
+    report.check(
+        "second engine loads the same rules",
+        listed2 == edited.rules,
+        json!(listed2.iter().map(|r| &r.name).collect::<Vec<_>>()),
+    );
     let died = engine2.history(&sync.id).into_iter().find(|r| r.id == "died-running");
-    report.check("a run left running becomes lost", died.as_ref().is_some_and(|r| r.status == "lost" && r.error.is_some()), json!(died.as_ref().map(run_json)));
-    let interval_runs = wait_runs(engine2, &interval_rule.id, 2, Duration::from_secs(20)).await.unwrap_or_default();
-    let interval_status = engine2.list().watches.into_iter().find(|w| w.rule.id == interval_rule.id);
-    let next_in = interval_status.as_ref().and_then(|s| s.next_interval_at_unix).map(|t| t as f64 - now_unix_f64());
+    report.check(
+        "a run left running becomes lost",
+        died.as_ref().is_some_and(|r| r.status == "lost" && r.error.is_some()),
+        json!(died.as_ref().map(run_json)),
+    );
+    let interval_runs = wait_runs(engine2, &interval_rule.id, 2, Duration::from_secs(20))
+        .await
+        .unwrap_or_default();
+    let interval_status = engine2
+        .list()
+        .watches
+        .into_iter()
+        .find(|w| w.rule.id == interval_rule.id);
+    let next_in = interval_status
+        .as_ref()
+        .and_then(|s| s.next_interval_at_unix)
+        .map(|t| t as f64 - now_unix_f64());
     report.check(
         "a missed interval slot runs once, soon after start, and the next is a minute later",
         interval_runs.first().is_some_and(|r| r.trigger == "interval" && r.status == "success") && dst_i.join("i.txt").is_file() && next_in.is_some_and(|s| (40.0..=61.0).contains(&s)),
         json!({ "run": interval_runs.first().map(run_json), "afterSeconds": started2.elapsed().as_secs_f64(), "nextIntervalInSeconds": next_in }),
     );
     let copy_runs = finished_runs(engine2, &copy.id).len();
-    let start_run = wait_runs(engine2, &copy.id, copy_runs + 1, Duration::from_secs(30)).await.unwrap_or_default();
+    let start_run = wait_runs(engine2, &copy.id, copy_runs + 1, Duration::from_secs(30))
+        .await
+        .unwrap_or_default();
     let start_after = started2.elapsed().as_secs_f64();
     report.check(
         "runOnStart runs about 10 s after the engine starts",
-        start_run.first().is_some_and(|r| r.trigger == "start" && r.status == "success") && (9.0..=25.0).contains(&start_after),
+        start_run
+            .first()
+            .is_some_and(|r| r.trigger == "start" && r.status == "success")
+            && (9.0..=25.0).contains(&start_after),
         json!({ "run": start_run.first().map(run_json), "secondsAfterStart": start_after }),
     );
     let reattached = wait_until(Duration::from_secs(10), || engine2.is_watching(&copy.id)).await;
     tokio::time::sleep(Duration::from_millis(500)).await;
     let before = finished_runs(engine2, &copy.id).len();
     write(&src_a.join("after-restart.txt"), b"after restart\n");
-    let runs = wait_runs(engine2, &copy.id, before + 1, Duration::from_secs(30)).await.unwrap_or_default();
-    report.check("after the restart the copy rule watches again", reattached.is_some() && runs.first().is_some_and(|r| r.trigger == "change") && dst_a.join("after-restart.txt").is_file(), json!(runs.first().map(run_json)));
-    let _ = wait_until(Duration::from_secs(30), || engine2.list().watches.iter().all(|w| w.running.is_none())).await;
+    let runs = wait_runs(engine2, &copy.id, before + 1, Duration::from_secs(30))
+        .await
+        .unwrap_or_default();
+    report.check(
+        "after the restart the copy rule watches again",
+        reattached.is_some()
+            && runs.first().is_some_and(|r| r.trigger == "change")
+            && dst_a.join("after-restart.txt").is_file(),
+        json!(runs.first().map(run_json)),
+    );
+    let _ = wait_until(Duration::from_secs(30), || {
+        engine2.list().watches.iter().all(|w| w.running.is_none())
+    })
+    .await;
 
     // ----- 11. emails -----
     // Expected: every finished run of a rule with policy always, and every failed one under policy failure.
     let mut expected = 0;
     for w in engine2.list().watches {
-        for r in finished_runs(engine2, &w.rule.id).iter().filter(|r| r.id != "died-running" && r.id != "old-interval") {
+        for r in finished_runs(engine2, &w.rule.id)
+            .iter()
+            .filter(|r| r.id != "died-running" && r.id != "old-interval")
+        {
             if email::should_notify(&w.rule.notify, &r.status) {
                 expected += 1;
             }
         }
     }
-    let messages = sink.wait_for(expected, Duration::from_secs(20)).await.unwrap_or_else(|m| m);
+    let messages = sink
+        .wait_for(expected, Duration::from_secs(20))
+        .await
+        .unwrap_or_else(|m| m);
     tokio::time::sleep(Duration::from_secs(2)).await;
-    let messages = if sink.messages().len() > messages.len() { sink.messages() } else { messages };
+    let messages = if sink.messages().len() > messages.len() {
+        sink.messages()
+    } else {
+        messages
+    };
     let send_results = emails.lock().unwrap().clone();
     let subjects: Vec<String> = messages.iter().map(|m| m.subject().unwrap_or_default()).collect();
     report.check(
@@ -620,8 +861,14 @@ async fn scenario() {
     );
     report.check(
         "successful copy emails read “finished” and come from the watch folder",
-        messages.iter().filter(|m| m.subject().unwrap_or_default().contains("Copy photos")).all(|m| m.subject().unwrap_or_default().contains("finished") && m.text().contains("Copy photos")),
-        json!(subjects.iter().filter(|s| s.contains("Copy photos")).collect::<Vec<_>>()),
+        messages
+            .iter()
+            .filter(|m| m.subject().unwrap_or_default().contains("Copy photos"))
+            .all(|m| m.subject().unwrap_or_default().contains("finished") && m.text().contains("Copy photos")),
+        json!(subjects
+            .iter()
+            .filter(|s| s.contains("Copy photos"))
+            .collect::<Vec<_>>()),
     );
     for (i, m) in messages.iter().enumerate() {
         let _ = std::fs::write(artifacts.join(format!("email-{:02}.eml", i + 1)), &m.data);
@@ -640,7 +887,11 @@ async fn scenario() {
         .filter(|e| e.event != crate::rclone::activity::ACTIVITY_EVENT)
         .map(|e| json!({ "event": e.event, "atMs": e.at_ms, "payload": e.payload }))
         .collect();
-    std::fs::write(artifacts.join("events.json"), serde_json::to_vec_pretty(&events).unwrap()).unwrap();
+    std::fs::write(
+        artifacts.join("events.json"),
+        serde_json::to_vec_pretty(&events).unwrap(),
+    )
+    .unwrap();
     let passed = report.failures.is_empty();
     let summary = json!({
         "test": "live_watch_end_to_end",
@@ -652,21 +903,39 @@ async fn scenario() {
         "checks": report.checks,
         "failures": report.failures,
     });
-    std::fs::write(artifacts.join("report.json"), serde_json::to_vec_pretty(&summary).unwrap()).unwrap();
+    std::fs::write(
+        artifacts.join("report.json"),
+        serde_json::to_vec_pretty(&summary).unwrap(),
+    )
+    .unwrap();
     println!("artifacts in {}", artifacts.display());
     if passed {
         let _ = std::fs::remove_dir_all(&scratch);
     }
-    assert!(passed, "{} check(s) failed:\n{}", report.failures.len(), report.failures.join("\n"));
+    assert!(
+        passed,
+        "{} check(s) failed:\n{}",
+        report.failures.len(),
+        report.failures.join("\n")
+    );
 }
 
 fn now_unix_f64() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0)
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0)
 }
 
 /// The rule as the engine has it now (the baseline is the engine's to keep).
 fn current(engine: &WatchEngine, id: &str) -> WatchRule {
-    engine.list().watches.into_iter().find(|w| w.rule.id == id).map(|w| w.rule).expect("the rule is listed")
+    engine
+        .list()
+        .watches
+        .into_iter()
+        .find(|w| w.rule.id == id)
+        .map(|w| w.rule)
+        .expect("the rule is listed")
 }
 
 /// The newest job the engine recorded for a rule.
@@ -731,12 +1000,19 @@ async fn options_scenario() {
     settings.transfer_log_level = "INFO".into();
     // bisync keeps its listings in rclone's cache folder; one inside the scratch folder keeps the user's
     // untouched, and the test starts without listings of its paths.
-    settings.extra_daemon_env.insert("RCLONE_CACHE_DIR".into(), scratch.join("cache").to_string_lossy().into());
+    settings.extra_daemon_env.insert(
+        "RCLONE_CACHE_DIR".into(),
+        scratch.join("cache").to_string_lossy().into(),
+    );
     let host = new_host(&scratch, &binary, settings, Arc::default());
     let engine_host: HostRef = host.clone();
     host.engine.start(engine_host);
     let engine = &host.engine;
-    let mut report = Report { t0: Instant::now(), checks: Vec::new(), failures: Vec::new() };
+    let mut report = Report {
+        t0: Instant::now(),
+        checks: Vec::new(),
+        failures: Vec::new(),
+    };
     let run_timeout = Duration::from_secs(60);
 
     // ----- 1. validation and migration -----
@@ -745,13 +1021,32 @@ async fn options_scenario() {
     std::fs::create_dir_all(p2.join("inner")).unwrap();
     let mut underscore = rule("underscore", "copy", &p1, &p2);
     underscore.config.insert("_async".into(), json!(false));
-    let two_remotes = WatchRule { source: "one:a".into(), destination: "two:b".into(), ..rule("remotes", "bisync", &p1, &p2) };
-    let over = WatchRule { max_delete_percent: 101, ..rule("over", "bisync", &p1, &p2) };
+    let two_remotes = WatchRule {
+        source: "one:a".into(),
+        destination: "two:b".into(),
+        ..rule("remotes", "bisync", &p1, &p2)
+    };
+    let over = WatchRule {
+        max_delete_percent: 101,
+        ..rule("over", "bisync", &p1, &p2)
+    };
     for (label, candidate, expect) in [
         ("a max delete over 100 % is refused", over, "percentage"),
-        ("a bisync whose source is inside its destination is refused", nested, "inside the destination"),
-        ("an rclone option starting with _ is refused", underscore, "not an rclone option name"),
-        ("a bisync between two remotes cannot be watched for changes", two_remotes, "neither path"),
+        (
+            "a bisync whose source is inside its destination is refused",
+            nested,
+            "inside the destination",
+        ),
+        (
+            "an rclone option starting with _ is refused",
+            underscore,
+            "not an rclone option name",
+        ),
+        (
+            "a bisync between two remotes cannot be watched for changes",
+            two_remotes,
+            "neither path",
+        ),
     ] {
         let result = engine.save(candidate);
         let message = result.as_ref().err().map(|e| e.to_string()).unwrap_or_default();
@@ -759,7 +1054,11 @@ async fn options_scenario() {
     }
     std::fs::remove_dir_all(p2.join("inner")).unwrap();
     let (legacy_src, legacy_dst) = (dir("legacy-src"), dir("legacy-dst"));
-    let mut legacy = WatchRule { min_age_seconds: Some(60), on_change: false, ..rule("legacy", "copy", &legacy_src, &legacy_dst) };
+    let mut legacy = WatchRule {
+        min_age_seconds: Some(60),
+        on_change: false,
+        ..rule("legacy", "copy", &legacy_src, &legacy_dst)
+    };
     legacy.excludes = vec!["*.tmp".into()];
     legacy.filter.insert("ExcludeRule".into(), json!(["*.bak", "*.tmp"]));
     legacy.filter.insert("MaxSize".into(), json!(""));
@@ -771,7 +1070,9 @@ async fn options_scenario() {
     );
     report.check(
         "excludes written into the filter join the rule's excludes, and empty values are dropped",
-        saved.excludes == vec!["*.tmp".to_string(), "*.bak".to_string()] && !saved.filter.contains_key("ExcludeRule") && !saved.filter.contains_key("MaxSize"),
+        saved.excludes == vec!["*.tmp".to_string(), "*.bak".to_string()]
+            && !saved.filter.contains_key("ExcludeRule")
+            && !saved.filter.contains_key("MaxSize"),
         json!({ "excludes": saved.excludes, "filter": saved.filter }),
     );
     engine.delete(&saved.id).unwrap();
@@ -785,7 +1086,11 @@ async fn options_scenario() {
     write(&src.join("skip-me.jpg"), b"excluded");
     write(&src.join("sub/x.txt"), b"included by folder");
     write(&dst.join("a.jpg"), b"OLD a");
-    let mut opts = WatchRule { on_change: false, excludes: vec!["skip-*".into()], ..rule("Options", "copy", &src, &dst) };
+    let mut opts = WatchRule {
+        on_change: false,
+        excludes: vec!["skip-*".into()],
+        ..rule("Options", "copy", &src, &dst)
+    };
     opts.config.insert("IgnoreExisting".into(), json!(true));
     opts.config.insert("Transfers".into(), json!(2));
     opts.filter.insert("IncludeRule".into(), json!(["*.jpg", "/sub/**"]));
@@ -793,16 +1098,40 @@ async fn options_scenario() {
     let opts = engine.save(opts).unwrap();
     engine.run_now(&opts.id).unwrap();
     let runs = wait_runs(engine, &opts.id, 1, run_timeout).await.unwrap_or_default();
-    report.check("the copy with options succeeds", runs.first().is_some_and(|r| r.status == "success"), json!(runs.first().map(run_json)));
+    report.check(
+        "the copy with options succeeds",
+        runs.first().is_some_and(|r| r.status == "success"),
+        json!(runs.first().map(run_json)),
+    );
     let observed = json!({
         "a.jpg": read(&dst.join("a.jpg")), "b.jpg": read(&dst.join("b.jpg")), "big.jpg": read(&dst.join("big.jpg")).len(),
         "note.txt": read(&dst.join("note.txt")), "skip-me.jpg": read(&dst.join("skip-me.jpg")), "sub/x.txt": read(&dst.join("sub/x.txt")),
     });
-    report.check("IgnoreExisting: a file already at the destination is left as it was", read(&dst.join("a.jpg")) == "OLD a", observed.clone());
-    report.check("IncludeRule: included files arrive (by pattern and by folder)", read(&dst.join("b.jpg")) == "new b" && read(&dst.join("sub/x.txt")) == "included by folder", observed.clone());
-    report.check("IncludeRule: a file not included stays behind", !dst.join("note.txt").exists(), observed.clone());
-    report.check("MaxSize: a file over the limit stays behind", !dst.join("big.jpg").exists(), observed.clone());
-    report.check("excludes still apply next to the filter", !dst.join("skip-me.jpg").exists(), observed);
+    report.check(
+        "IgnoreExisting: a file already at the destination is left as it was",
+        read(&dst.join("a.jpg")) == "OLD a",
+        observed.clone(),
+    );
+    report.check(
+        "IncludeRule: included files arrive (by pattern and by folder)",
+        read(&dst.join("b.jpg")) == "new b" && read(&dst.join("sub/x.txt")) == "included by folder",
+        observed.clone(),
+    );
+    report.check(
+        "IncludeRule: a file not included stays behind",
+        !dst.join("note.txt").exists(),
+        observed.clone(),
+    );
+    report.check(
+        "MaxSize: a file over the limit stays behind",
+        !dst.join("big.jpg").exists(),
+        observed.clone(),
+    );
+    report.check(
+        "excludes still apply next to the filter",
+        !dst.join("skip-me.jpg").exists(),
+        observed,
+    );
     let job = last_job(engine, &opts.id);
     let params = job.as_ref().map(|j| j.params.clone()).unwrap_or_default();
     report.check(
@@ -814,12 +1143,19 @@ async fn options_scenario() {
             && params["_filter"].get("IncludeRule").is_none(),
         params.clone(),
     );
-    std::fs::write(artifacts.join("copy-options-params.json"), serde_json::to_vec_pretty(&params).unwrap()).unwrap();
+    std::fs::write(
+        artifacts.join("copy-options-params.json"),
+        serde_json::to_vec_pretty(&params).unwrap(),
+    )
+    .unwrap();
 
     // ----- 3. dry run -----
     let (dry_src, dry_dst) = (dir("dry-src"), dir("dry-dst"));
     write(&dry_src.join("file.txt"), b"would be copied");
-    let mut dry = WatchRule { on_change: false, ..rule("Dry", "copy", &dry_src, &dry_dst) };
+    let mut dry = WatchRule {
+        on_change: false,
+        ..rule("Dry", "copy", &dry_src, &dry_dst)
+    };
     dry.config.insert("DryRun".into(), json!(true));
     let dry = engine.save(dry).unwrap();
     engine.run_now(&dry.id).unwrap();
@@ -827,19 +1163,25 @@ async fn options_scenario() {
     let title = last_job(engine, &dry.id).map(|j| j.title).unwrap_or_default();
     report.check(
         "a dry run succeeds, copies nothing and says so in its title",
-        runs.first().is_some_and(|r| r.status == "success") && !dry_dst.join("file.txt").exists() && title == "Copy (dry run)",
+        runs.first().is_some_and(|r| r.status == "success")
+            && !dry_dst.join("file.txt").exists()
+            && title == "Copy (dry run)",
         json!({ "run": runs.first().map(run_json), "title": title, "copied": dry_dst.join("file.txt").exists() }),
     );
 
     // ----- 4. an option rclone refuses -----
-    let mut bad = WatchRule { on_change: false, ..rule("Bad option", "copy", &dry_src, &dry_dst) };
+    let mut bad = WatchRule {
+        on_change: false,
+        ..rule("Bad option", "copy", &dry_src, &dry_dst)
+    };
     bad.config.insert("Transfers".into(), json!("lots"));
     let bad = engine.save(bad).unwrap();
     engine.run_now(&bad.id).unwrap();
     let runs = wait_runs(engine, &bad.id, 1, run_timeout).await.unwrap_or_default();
     report.check(
         "an option rclone refuses fails the run, with rclone's reason",
-        runs.first().is_some_and(|r| r.status == "error" && r.error.as_deref().is_some_and(|e| !e.is_empty())),
+        runs.first()
+            .is_some_and(|r| r.status == "error" && r.error.as_deref().is_some_and(|e| !e.is_empty())),
         json!(runs.first().map(run_json)),
     );
 
@@ -848,7 +1190,12 @@ async fn options_scenario() {
     write(&p2.join("from-2.txt"), b"two");
     write(&p1.join("both.txt"), b"path1 version");
     write(&p2.join("both.txt"), b"path2 version, newer");
-    let bi = engine.save(WatchRule { resync_mode: "newer".into(), ..rule("Two-way", "bisync", &p1, &p2) }).unwrap();
+    let bi = engine
+        .save(WatchRule {
+            resync_mode: "newer".into(),
+            ..rule("Two-way", "bisync", &p1, &p2)
+        })
+        .unwrap();
     engine.run_now(&bi.id).unwrap();
     let runs = wait_runs(engine, &bi.id, 1, run_timeout).await.unwrap_or_default();
     let title = last_job(engine, &bi.id).map(|j| j.title).unwrap_or_default();
@@ -857,7 +1204,11 @@ async fn options_scenario() {
         "path1": [read(&p1.join("from-1.txt")), read(&p1.join("from-2.txt")), read(&p1.join("both.txt"))],
         "path2": [read(&p2.join("from-1.txt")), read(&p2.join("from-2.txt")), read(&p2.join("both.txt"))],
     });
-    report.check("the first bisync run resyncs by itself and succeeds", runs.first().is_some_and(|r| r.status == "success") && title == "Bisync (resync)", observed.clone());
+    report.check(
+        "the first bisync run resyncs by itself and succeeds",
+        runs.first().is_some_and(|r| r.status == "success") && title == "Bisync (resync)",
+        observed.clone(),
+    );
     report.check(
         "the resync merges both sides without deleting",
         read(&p1.join("from-2.txt")) == "two" && read(&p2.join("from-1.txt")) == "one",
@@ -869,27 +1220,43 @@ async fn options_scenario() {
         observed,
     );
     let baseline = current(engine, &bi.id).bisync_baseline;
-    report.check("the baseline names both paths after the resync", baseline == super::rules::bisync_key(&bi), json!(baseline));
+    report.check(
+        "the baseline names both paths after the resync",
+        baseline == super::rules::bisync_key(&bi),
+        json!(baseline),
+    );
 
     // A change in the destination starts a run: bisync watches both folders.
-    let watching = wait_until(Duration::from_secs(10), || engine.is_watching(&bi.id)).await.is_some();
+    let watching = wait_until(Duration::from_secs(10), || engine.is_watching(&bi.id))
+        .await
+        .is_some();
     report.check("the bisync rule is watching", watching, json!(state_of(engine, &bi.id)));
     tokio::time::sleep(Duration::from_secs(3)).await;
     let before = finished_runs(engine, &bi.id).len();
     write(&p2.join("made-in-2.txt"), b"written in path 2");
-    let runs = wait_runs(engine, &bi.id, before + 1, run_timeout).await.unwrap_or_default();
+    let runs = wait_runs(engine, &bi.id, before + 1, run_timeout)
+        .await
+        .unwrap_or_default();
     let title = last_job(engine, &bi.id).map(|j| j.title).unwrap_or_default();
     report.check(
         "a file written into the destination starts a run and reaches the source, without a resync",
-        runs.first().is_some_and(|r| r.status == "success" && r.trigger == "change") && read(&p1.join("made-in-2.txt")) == "written in path 2" && title == "Bisync",
+        runs.first()
+            .is_some_and(|r| r.status == "success" && r.trigger == "change")
+            && read(&p1.join("made-in-2.txt")) == "written in path 2"
+            && title == "Bisync",
         json!({ "run": runs.first().map(run_json), "title": title, "inSource": read(&p1.join("made-in-2.txt")) }),
     );
     // Let the run's own changes settle (they may set off one run that finds nothing to do).
     tokio::time::sleep(Duration::from_secs(6)).await;
-    let _ = wait_until(run_timeout, || engine.history(&bi.id).iter().all(|r| r.status != "running") && state_of(engine, &bi.id).0 != "waiting").await;
+    let _ = wait_until(run_timeout, || {
+        engine.history(&bi.id).iter().all(|r| r.status != "running") && state_of(engine, &bi.id).0 != "waiting"
+    })
+    .await;
     let before = finished_runs(engine, &bi.id).len();
     std::fs::remove_file(p1.join("from-1.txt")).unwrap();
-    let runs = wait_runs(engine, &bi.id, before + 1, run_timeout).await.unwrap_or_default();
+    let runs = wait_runs(engine, &bi.id, before + 1, run_timeout)
+        .await
+        .unwrap_or_default();
     report.check(
         "a deletion in the source is carried over to the destination",
         runs.first().is_some_and(|r| r.status == "success") && !p2.join("from-1.txt").exists(),
@@ -898,21 +1265,48 @@ async fn options_scenario() {
 
     // Saving a stale copy of the rule (baseline empty, as an editor opened earlier would send) keeps it.
     tokio::time::sleep(Duration::from_secs(6)).await;
-    let _ = wait_until(run_timeout, || engine.history(&bi.id).iter().all(|r| r.status != "running") && state_of(engine, &bi.id).0 != "waiting").await;
-    let resaved = engine.save(WatchRule { bisync_baseline: String::new(), on_change: false, ..current(engine, &bi.id) }).unwrap();
-    report.check("saving the rule keeps the baseline the engine made", resaved.bisync_baseline == baseline, json!(resaved.bisync_baseline));
+    let _ = wait_until(run_timeout, || {
+        engine.history(&bi.id).iter().all(|r| r.status != "running") && state_of(engine, &bi.id).0 != "waiting"
+    })
+    .await;
+    let resaved = engine
+        .save(WatchRule {
+            bisync_baseline: String::new(),
+            on_change: false,
+            ..current(engine, &bi.id)
+        })
+        .unwrap();
+    report.check(
+        "saving the rule keeps the baseline the engine made",
+        resaved.bisync_baseline == baseline,
+        json!(resaved.bisync_baseline),
+    );
     let before = finished_runs(engine, &bi.id).len();
-    let reset = engine.save(WatchRule { resync_next_run: true, ..current(engine, &bi.id) }).unwrap();
+    let reset = engine
+        .save(WatchRule {
+            resync_next_run: true,
+            ..current(engine, &bi.id)
+        })
+        .unwrap();
     engine.run_now(&bi.id).unwrap();
-    let runs = wait_runs(engine, &bi.id, before + 1, run_timeout).await.unwrap_or_default();
+    let runs = wait_runs(engine, &bi.id, before + 1, run_timeout)
+        .await
+        .unwrap_or_default();
     let title = last_job(engine, &bi.id).map(|j| j.title).unwrap_or_default();
     report.check(
         "“resync on the next run” clears the baseline, and the next run resyncs",
-        reset.bisync_baseline.is_empty() && runs.first().is_some_and(|r| r.status == "success") && title == "Bisync (resync)" && current(engine, &bi.id).bisync_baseline == baseline,
+        reset.bisync_baseline.is_empty()
+            && runs.first().is_some_and(|r| r.status == "success")
+            && title == "Bisync (resync)"
+            && current(engine, &bi.id).bisync_baseline == baseline,
         json!({ "savedBaseline": reset.bisync_baseline, "title": title, "run": runs.first().map(run_json) }),
     );
     let stored = std::fs::read_to_string(store::file_path(&host.paths.data_dir)).unwrap_or_default();
-    report.check("resyncNextRun is never stored", !stored.contains("resyncNextRun"), json!(stored.contains("resyncNextRun")));
+    report.check(
+        "resyncNextRun is never stored",
+        !stored.contains("resyncNextRun"),
+        json!(stored.contains("resyncNextRun")),
+    );
 
     // ----- artifacts -----
     engine.shutdown();
@@ -931,10 +1325,19 @@ async fn options_scenario() {
         "checks": report.checks,
         "failures": report.failures,
     });
-    std::fs::write(artifacts.join("report.json"), serde_json::to_vec_pretty(&summary).unwrap()).unwrap();
+    std::fs::write(
+        artifacts.join("report.json"),
+        serde_json::to_vec_pretty(&summary).unwrap(),
+    )
+    .unwrap();
     println!("artifacts in {}", artifacts.display());
     if passed {
         let _ = std::fs::remove_dir_all(&scratch);
     }
-    assert!(passed, "{} check(s) failed:\n{}", report.failures.len(), report.failures.join("\n"));
+    assert!(
+        passed,
+        "{} check(s) failed:\n{}",
+        report.failures.len(),
+        report.failures.join("\n")
+    );
 }

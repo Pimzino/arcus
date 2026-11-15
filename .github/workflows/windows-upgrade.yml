@@ -1,7 +1,8 @@
 name: Windows upgrade check
 
 # Proves on a real Windows machine that installing this commit over an older published release upgrades it:
-# the old install goes, the new one is there, and the user's data (under the bundle identifier) survives.
+# the old install goes, the new one is there, and the user's data (under the bundle identifier) survives and
+# moves to the Arcus folders when the new version first starts.
 # It exists for the rename from "Rclone GUI" to Arcus, which changed the product name the installers key an
 # install on (see src-tauri/windows/installer-hooks.nsh and bundle.windows.wix.upgradeCode), and is worth
 # running again whenever the installer settings change. Run it from the Actions tab.
@@ -74,7 +75,8 @@ jobs:
           Run $old
           Check ((Installed 'Rclone GUI').Count -eq 1) 'the old version is installed'
 
-          # What a user has by now: settings, a downloaded rclone, logs. All under the bundle identifier.
+          # What a user has by now: settings, a downloaded rclone, logs. All under the bundle identifier, as up to
+          # v0.9.1; the installers keep them there, and Arcus moves them to its own folders when it starts.
           $data = Join-Path $env:APPDATA 'com.rclonegui.desktop'
           $logs = Join-Path $env:LOCALAPPDATA 'com.rclonegui.desktop\logs'
           New-Item -ItemType Directory -Force "$data\bin\v1.0.0", $logs | Out-Null
@@ -93,3 +95,20 @@ jobs:
           $menu = @("$env:APPDATA\Microsoft\Windows\Start Menu\Programs", "$env:ProgramData\Microsoft\Windows\Start Menu\Programs")
           Check (-not (Get-ChildItem $menu -Recurse -Filter 'Rclone GUI.lnk' -ErrorAction SilentlyContinue)) 'no Rclone GUI shortcut left in the Start menu'
           Check (Get-ChildItem $menu -Recurse -Filter 'Arcus.lnk' -ErrorAction SilentlyContinue) 'an Arcus shortcut in the Start menu'
+
+          # The first start moves the data and logs to the Arcus folders (src-tauri paths.rs). The placeholder
+          # rclone cannot start, which the app reports and survives.
+          $exe = (Get-ChildItem "$env:LOCALAPPDATA\Arcus", "$env:ProgramFiles\Arcus" -Filter arcus.exe -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          Check ($exe) "the installed arcus.exe is found (got '$exe')"
+          $app = Start-Process $exe -PassThru
+          $newData = Join-Path $env:APPDATA 'Arcus'
+          $newLogs = Join-Path $env:LOCALAPPDATA 'Arcus\logs'
+          for ($i = 0; $i -lt 60 -and -not (Test-Path "$newLogs\arcus.log"); $i++) { Start-Sleep -Milliseconds 500 }
+          Start-Sleep -Seconds 2
+          Stop-Process -Id $app.Id -Force
+          foreach ($f in "$newData\settings.json", "$newData\bin\v1.0.0\rclone.exe", "$newLogs\rclone-gui.log", "$newLogs\arcus.log") {
+            Check (Test-Path $f) "moved to the Arcus folders: $f"
+          }
+          Check (-not (Test-Path "$data\settings.json")) 'no settings left in the old data folder'
+          Check (-not (Test-Path $logs)) 'no old log folder left'
+          Get-Content "$newLogs\arcus.log" | Select-String 'moved ' | ForEach-Object { Write-Host $_ }

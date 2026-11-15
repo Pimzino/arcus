@@ -53,7 +53,7 @@ const TAURI = join(ROOT, "node_modules/.bin/tauri");
 const REAL_HOME = homedir();
 const LOCAL_NETWORK = process.env.ARCUS_E2E_LOCAL_NETWORK === "1";
 const RCLONE = (() => {
-  const dir = join(REAL_HOME, "Library/Application Support/com.rclonegui.desktop/bin");
+  const dir = join(REAL_HOME, "Library/Application Support/Arcus/bin");
   const versions = existsSync(dir) ? execFileSync("ls", [dir], { encoding: "utf8" }).split("\n").filter((d) => d.startsWith("v")).sort() : [];
   return process.env.ARCUS_TEST_BINARY ?? join(dir, versions.at(-1) ?? "none", "rclone");
 })();
@@ -182,7 +182,7 @@ try {
   // Runs of the app.
   function newHome(name, store = {}) {
     const home = join(work, name);
-    const data = join(home, "Library/Application Support", IDENTIFIER);
+    const data = join(home, "Library/Application Support/Arcus");
     mkdirSync(join(data, "store"), { recursive: true });
     writeFileSync(
       join(data, "settings.json"),
@@ -191,7 +191,7 @@ try {
     for (const [key, value] of Object.entries(store)) writeFileSync(join(data, "store", `${key}.json`), JSON.stringify(value));
     // The Full Disk Access probe opens ~/Library/Application Support/com.apple.TCC/TCC.db: the real one.
     symlinkSync(join(REAL_HOME, "Library/Application Support/com.apple.TCC"), join(home, "Library/Application Support/com.apple.TCC"));
-    return { home, data, log: join(home, "Library/Logs", IDENTIFIER, "arcus.log") };
+    return { home, data, log: join(home, "Library/Logs/Arcus/arcus.log") };
   }
 
   const executable = (app) => join(app, "Contents/MacOS", plist(app, "CFBundleExecutable"));

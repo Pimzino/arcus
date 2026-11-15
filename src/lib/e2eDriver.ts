@@ -1,4 +1,4 @@
-import { useAppStore } from "../store/app";
+import { useAppStore, type Page } from "../store/app";
 import { invoke } from "./tauri";
 
 /**
@@ -10,12 +10,21 @@ import { invoke } from "./tauri";
  * - `{ "waitFor": "text", "timeoutMs"?: ms }`: until the page shows the text
  * - `{ "click": "Button label", "within"?: "text of the button's section" }`
  * - `{ "report": "name" }`: the page shown, its text and the stored permissions progress, to the report file
+ * - `{ "page": "explorer" }`: show a page, as the sidebar does
+ * - `{ "fill": "aria-label", "value": "text" }`: type into the field with that label
+ * - `{ "drop": "name", "from": 1, "to": 2 }`: drag the row of that name from one explorer pane onto the other, as
+ *   a mouse would (dragstart on the row, dragover and drop on the pane)
+ * - `{ "invoke": "command", "args"?: {…} }`: call a backend command; its answer goes to the report file
  */
 type Step =
   | { wait: number }
   | { waitFor: string; timeoutMs?: number }
   | { click: string; within?: string }
-  | { report: string };
+  | { report: string }
+  | { page: Page }
+  | { fill: string; value: string }
+  | { drop: string; from: number; to: number }
+  | { invoke: string; args?: Record<string, unknown> };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mainText = () => (document.querySelector("main") as HTMLElement | null)?.innerText ?? document.body.innerText;
@@ -55,6 +64,27 @@ export async function runE2eSteps() {
         const button = findButton(step.click, step.within);
         if (!button) throw new Error(`no button "${step.click}"${step.within ? ` in "${step.within}"` : ""}`);
         button.click();
+      } else if ("page" in step) {
+        useAppStore.getState().setPage(step.page);
+      } else if ("fill" in step) {
+        const field = document.querySelector<HTMLInputElement>(`input[aria-label="${CSS.escape(step.fill)}"]`);
+        if (!field) throw new Error(`no field "${step.fill}"`);
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, step.value);
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+      } else if ("drop" in step) {
+        const pane = (n: number) => document.querySelector<HTMLElement>(`section[aria-label="Pane ${n}"]`);
+        const row = pane(step.from)?.querySelector<HTMLElement>(`[data-name="${CSS.escape(step.drop)}"]`);
+        const target = pane(step.to);
+        if (!row || !target) throw new Error(`no row "${step.drop}" in pane ${step.from}, or no pane ${step.to}`);
+        const dataTransfer = new DataTransfer();
+        row.dispatchEvent(new DragEvent("dragstart", { bubbles: true, cancelable: true, dataTransfer }));
+        await sleep(50);
+        target.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer }));
+        await sleep(50);
+        target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer }));
+      } else if ("invoke" in step) {
+        await report({ invoke: step.invoke, answer: await invoke(step.invoke, step.args ?? {}) });
+        continue;
       } else if ("report" in step) {
         const { page, macPermissions } = useAppStore.getState();
         await report({ report: step.report, page, macPermissions, text: mainText().slice(0, 6000) });

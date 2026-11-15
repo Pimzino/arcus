@@ -2,10 +2,10 @@
 
 use crate::error::{AppError, AppResult};
 use crate::paths::write_atomic;
+use crate::rclone::activity::{ActivitySink, ACTIVITY_EVENT};
 use crate::rclone::daemon::DaemonInfo;
 use crate::rclone::platform::{self, Target};
 use crate::rclone::provision::{self, InstalledRclone, ProvisionEvent};
-use crate::rclone::activity::{ActivitySink, ACTIVITY_EVENT};
 use crate::rclone::transfers::{StoppedTransfer, TransferDaemonInfo, TransferDaemons};
 use crate::settings::{self, Settings};
 use crate::AppState;
@@ -30,6 +30,8 @@ pub struct AppInfo {
     pub transfer_logs_dir: String,
     pub home_dir: Option<String>,
     pub path_separator: String,
+    /// Why the data or log folder could not be moved to its Arcus name at this start; the UI shows it.
+    pub folder_move_error: Option<String>,
 }
 
 #[tauri::command]
@@ -43,12 +45,9 @@ pub fn app_info(app: AppHandle, state: State<'_, AppState>) -> AppInfo {
         bin_dir: state.paths.bin_dir.to_string_lossy().to_string(),
         logs_dir: state.paths.logs_dir.to_string_lossy().to_string(),
         transfer_logs_dir: transfer_logs_dir(&state).to_string_lossy().to_string(),
-        home_dir: app
-            .path()
-            .home_dir()
-            .ok()
-            .map(|p| p.to_string_lossy().to_string()),
+        home_dir: app.path().home_dir().ok().map(|p| p.to_string_lossy().to_string()),
         path_separator: std::path::MAIN_SEPARATOR.to_string(),
+        folder_move_error: state.folder_move_error.clone(),
     }
 }
 
@@ -58,9 +57,37 @@ pub fn settings_get(state: State<'_, AppState>) -> Settings {
 }
 
 #[tauri::command]
-pub fn settings_set(app: AppHandle, state: State<'_, AppState>, mut settings: Settings) -> AppResult<Settings> {
+pub async fn settings_set(app: AppHandle, state: State<'_, AppState>, mut settings: Settings) -> AppResult<Settings> {
     // The UI only ever edits migrated settings; a version it leaves out must not migrate them again.
     settings.settings_version = settings::SETTINGS_VERSION;
+    if settings.default_transfers == Some(0) || settings.default_checkers == Some(0) {
+        return Err(AppError::msg("parallel transfers and checkers must be at least 1"));
+    }
+    let bwlimit = settings.default_bwlimit.trim().to_string();
+    if !bwlimit.is_empty() && bwlimit != state.settings.lock().unwrap().default_bwlimit.trim() {
+        // rclone's own parser decides, here rather than as every transfer's rclone refuses to start.
+        let (binary, _) = resolve_active_binary(&state)?;
+        let mut cmd = tokio::process::Command::new(&binary);
+        cmd.args(["--bwlimit", &bwlimit, "version"])
+            .stdin(std::process::Stdio::null())
+            .kill_on_drop(true);
+        #[cfg(windows)]
+        cmd.creation_flags(crate::rclone::provision::CREATE_NO_WINDOW);
+        let out = cmd
+            .output()
+            .await
+            .map_err(|e| AppError::msg(format!("cannot run {}: {e}", binary.display())))?;
+        if !out.status.success() {
+            let why = String::from_utf8_lossy(&out.stderr)
+                .lines()
+                .next()
+                .unwrap_or_default()
+                .to_string();
+            return Err(AppError::msg(format!(
+                "rclone does not take this bandwidth limit. {why}"
+            )));
+        }
+    }
     settings::save(&state.paths.settings_file, &settings)?;
     *state.settings.lock().unwrap() = settings.clone();
     // Tray icon and the launch-at-login entry follow the settings at once.
@@ -297,7 +324,10 @@ pub async fn rc_call(
 ) -> AppResult<Value> {
     let client = client_for(&state, daemon.as_deref()).await?;
     let params = params.unwrap_or(Value::Null);
-    if let Some(id) = daemon.as_deref().filter(|_| params.get("_async") == Some(&Value::Bool(true))) {
+    if let Some(id) = daemon
+        .as_deref()
+        .filter(|_| params.get("_async") == Some(&Value::Bool(true)))
+    {
         state.transfer_daemons.job_starting(id).await;
     }
     client.call(&path, &params).await
@@ -370,7 +400,11 @@ pub async fn transfer_daemon_list(state: State<'_, AppState>) -> AppResult<Vec<T
 /// there: a transfer log is deleted once it is past the retention the user chose.
 #[tauri::command]
 pub async fn log_tail(state: State<'_, AppState>, path: String, lines: Option<usize>) -> AppResult<Option<String>> {
-    let logs_root = state.paths.logs_dir.canonicalize().unwrap_or_else(|_| state.paths.logs_dir.clone());
+    let logs_root = state
+        .paths
+        .logs_dir
+        .canonicalize()
+        .unwrap_or_else(|_| state.paths.logs_dir.clone());
     let requested = PathBuf::from(&path);
     let canonical = match requested.canonicalize() {
         Ok(p) => p,
@@ -388,11 +422,8 @@ pub fn transfer_logs_dir(state: &AppState) -> PathBuf {
 }
 
 fn store_path(state: &AppState, key: &str) -> AppResult<PathBuf> {
-    let valid = !key.is_empty()
-        && key.len() <= 64
-        && key
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    let valid =
+        !key.is_empty() && key.len() <= 64 && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
     if !valid {
         return Err(AppError::msg(format!("invalid store key '{key}'")));
     }
@@ -438,10 +469,16 @@ pub fn local_roots(app: AppHandle) -> Vec<LocalRoot> {
         // The platform's own folders: Linux's XDG user directories have translated names (Schreibtisch,
         // Documents, Téléchargements…) and can be moved, so the names are not guessed from the home folder.
         let path = app.path();
-        for dir in [path.desktop_dir(), path.document_dir(), path.download_dir()].into_iter().flatten() {
+        for dir in [path.desktop_dir(), path.document_dir(), path.download_dir()]
+            .into_iter()
+            .flatten()
+        {
             if dir.is_dir() && dir != home && !roots.iter().any(|r: &LocalRoot| Path::new(&r.path) == dir) {
                 roots.push(LocalRoot {
-                    name: dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+                    name: dir
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_default(),
                     path: dir.to_string_lossy().to_string(),
                     kind: "folder",
                 });
@@ -481,7 +518,10 @@ pub fn local_roots(app: AppHandle) -> Vec<LocalRoot> {
             .or_else(|| std::env::var("USER").ok());
         for volume in volumes(mount_dirs.iter().map(Path::new), user.as_deref()) {
             roots.push(LocalRoot {
-                name: volume.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+                name: volume
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default(),
                 path: volume.to_string_lossy().to_string(),
                 kind: "volume",
             });
@@ -602,8 +642,8 @@ pub async fn mac_open_privacy_settings(app: AppHandle, pane: String) -> AppResul
     if !cfg!(target_os = "macos") {
         return Err(AppError::msg("System Settings can only be opened on macOS"));
     }
-    let url = crate::macos::privacy_pane_url(&pane)
-        .ok_or_else(|| AppError::msg(format!("unknown privacy pane '{pane}'")))?;
+    let url =
+        crate::macos::privacy_pane_url(&pane).ok_or_else(|| AppError::msg(format!("unknown privacy pane '{pane}'")))?;
     let home = app.path().home_dir()?;
     tokio::task::spawn_blocking(move || match pane.as_str() {
         "fullDiskAccess" => {
@@ -649,16 +689,32 @@ mod tests {
         let root = std::env::temp_dir().join(format!("arcus-volumes-{}", std::process::id()));
         let media = root.join("media");
         let mnt = root.join("mnt");
-        for dir in [media.join("sam/USB STICK"), media.join("sam/Backup"), media.join("cdrom"), mnt.join("nas")] {
+        for dir in [
+            media.join("sam/USB STICK"),
+            media.join("sam/Backup"),
+            media.join("cdrom"),
+            mnt.join("nas"),
+        ] {
             create_dir_all(dir).unwrap();
         }
-        let found = volumes([media.as_path(), mnt.as_path(), root.join("missing").as_path()].into_iter(), Some("sam"));
+        let found = volumes(
+            [media.as_path(), mnt.as_path(), root.join("missing").as_path()].into_iter(),
+            Some("sam"),
+        );
         assert_eq!(
             found,
-            vec![media.join("cdrom"), media.join("sam/Backup"), media.join("sam/USB STICK"), mnt.join("nas")]
+            vec![
+                media.join("cdrom"),
+                media.join("sam/Backup"),
+                media.join("sam/USB STICK"),
+                mnt.join("nas")
+            ]
         );
         // Without a user name nothing is looked into.
-        assert_eq!(volumes([media.as_path()].into_iter(), None), vec![media.join("cdrom"), media.join("sam")]);
+        assert_eq!(
+            volumes([media.as_path()].into_iter(), None),
+            vec![media.join("cdrom"), media.join("sam")]
+        );
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

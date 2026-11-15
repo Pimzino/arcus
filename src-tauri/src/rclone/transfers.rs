@@ -92,7 +92,13 @@ pub fn compact_timestamp(unix: u64) -> String {
 fn safe_label(label: &str) -> String {
     let cleaned: String = label
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
         .collect();
     let trimmed = cleaned.trim_matches('-');
     if trimmed.is_empty() {
@@ -204,10 +210,17 @@ impl TransferDaemons {
         }
         // The activity shown in the UI comes from INFO lines, so rclone logs at least those;
         // the file holds what the user asked for.
-        let run_level = if log_level.as_deref() == Some("DEBUG") { "DEBUG" } else { "INFO" };
+        let run_level = if log_level.as_deref() == Some("DEBUG") {
+            "DEBUG"
+        } else {
+            "INFO"
+        };
         // --stats makes rclone write periodic progress lines into the log.
         let stats = if log_path.is_some() { "1m" } else { "0" };
-        let extra = vec!["--stats".to_string(), stats.to_string()];
+        // The transfer defaults from Settings go in as flags, so every transfer has them however it was
+        // started; a job's own `_config` and bandwidth limit, set over rc, still win.
+        let mut extra = vec!["--stats".to_string(), stats.to_string()];
+        extra.extend(settings.transfer_default_flags());
         let mut spawned = spawn_rcd(binary, settings, LogTarget::Stderr, run_level, &extra)?;
 
         let activity: Arc<StdMutex<ActivityState>> = Arc::default();
@@ -254,7 +267,15 @@ impl TransferDaemons {
                 if asked || code == Some(0) {
                     log::info!("transfer daemon {id} exited with {code:?}");
                 } else {
-                    let tail: Vec<String> = stderr_tail.lock().unwrap().iter().rev().take(5).rev().cloned().collect();
+                    let tail: Vec<String> = stderr_tail
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .rev()
+                        .take(5)
+                        .rev()
+                        .cloned()
+                        .collect();
                     log::error!("transfer daemon {id} exited with {code:?}: {}", tail.join(" | "));
                 }
             })
@@ -318,12 +339,19 @@ impl TransferDaemons {
         };
         quit_and_wait(&entry.client, entry.waiter, &entry.stop_tx).await;
         // The log ends when the process does; wait for its last lines to be counted and written.
-        if tokio::time::timeout(Duration::from_secs(3), &mut entry.pump).await.is_err() {
+        if tokio::time::timeout(Duration::from_secs(3), &mut entry.pump)
+            .await
+            .is_err()
+        {
             log::warn!("the log of transfer daemon {id} did not end with the process");
             entry.pump.abort();
         }
         if let (Some(path), Some(summary)) = (&entry.info.log_path, summary.filter(|s| !s.trim().is_empty())) {
-            let mut file = tokio::fs::OpenOptions::new().append(true).create(true).open(path).await?;
+            let mut file = tokio::fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(path)
+                .await?;
             file.write_all(format!("\n===== Arcus summary =====\n{}\n", summary.trim_end()).as_bytes())
                 .await?;
         }
@@ -349,7 +377,10 @@ impl TransferDaemons {
         // The disk is touched without the lock, so a sweep never holds up a starting transfer.
         let keep: HashSet<PathBuf> = {
             let guard = self.inner.lock().await;
-            guard.values().filter_map(|e| e.info.log_path.as_deref().map(PathBuf::from)).collect()
+            guard
+                .values()
+                .filter_map(|e| e.info.log_path.as_deref().map(PathBuf::from))
+                .collect()
         };
         let dir = Self::logs_dir(paths);
         let days = u64::from(retention_days.max(1));
@@ -397,7 +428,12 @@ mod tests {
     fn file_at(dir: &Path, name: &str, modified: SystemTime) -> PathBuf {
         let path = dir.join(name);
         std::fs::write(&path, b"a line\n").unwrap();
-        std::fs::File::options().write(true).open(&path).unwrap().set_modified(modified).unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
         path
     }
 
@@ -527,7 +563,10 @@ mod tests {
     fn a_sweep_is_due_once_the_interval_has_passed() {
         let last = SystemTime::now();
         assert!(!sweep_is_due(last, last + Duration::from_secs(23 * 3600), 24));
-        assert!(sweep_is_due(last, last + Duration::from_secs(24 * 3600), 24), "the boundary is due");
+        assert!(
+            sweep_is_due(last, last + Duration::from_secs(24 * 3600), 24),
+            "the boundary is due"
+        );
         assert!(sweep_is_due(last, last + Duration::from_secs(48 * 3600), 24));
     }
 
@@ -569,8 +608,13 @@ mod live_tests {
         let mut settings = Settings::default();
         settings.rclone_config_path = Some(base.join("rclone.conf").to_string_lossy().to_string());
         // what the user persisted must not take the log away from the app
-        settings.extra_daemon_env.insert("RCLONE_LOG_FILE".into(), base.join("stray.log").to_string_lossy().to_string());
-        settings.extra_daemon_env.insert("RCLONE_LOG_LEVEL".into(), "ERROR".into());
+        settings.extra_daemon_env.insert(
+            "RCLONE_LOG_FILE".into(),
+            base.join("stray.log").to_string_lossy().to_string(),
+        );
+        settings
+            .extra_daemon_env
+            .insert("RCLONE_LOG_LEVEL".into(), "ERROR".into());
 
         let daemons = TransferDaemons::default();
         let batches: Arc<StdMutex<Vec<ActivitySnapshot>>> = Arc::default();
@@ -596,12 +640,18 @@ mod live_tests {
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
             assert_eq!(status["success"].as_bool(), Some(true), "job status: {status}");
-            let stats = client.call("core/stats", &json!({ "group": format!("job/{jobid}") })).await.unwrap();
+            let stats = client
+                .call("core/stats", &json!({ "group": format!("job/{jobid}") }))
+                .await
+                .unwrap();
             assert_eq!(stats["transfers"].as_u64(), Some(2));
         };
 
         // a logged transfer
-        let info = daemons.start(&paths, &settings, &binary, "Copy: test", Some("INFO"), sink.clone()).await.unwrap();
+        let info = daemons
+            .start(&paths, &settings, &binary, "Copy: test", Some("INFO"), sink.clone())
+            .await
+            .unwrap();
         let log_path = PathBuf::from(info.log_path.clone().expect("a log file"));
         assert!(log_path.starts_with(TransferDaemons::logs_dir(&paths)));
         let client = daemons.client(&info.id).await.unwrap();
@@ -611,37 +661,81 @@ mod live_tests {
         run(&client, &dst).await;
         assert!(dst.join("sub").join("b.txt").is_file());
 
-        let stopped = daemons.stop(&info.id, Some("Result: success".into())).await.unwrap().unwrap();
+        let stopped = daemons
+            .stop(&info.id, Some("Result: success".into()))
+            .await
+            .unwrap()
+            .unwrap();
         assert!(daemons.client(&info.id).await.is_err());
-        assert!(!base.join("stray.log").exists(), "RCLONE_LOG_FILE must not redirect the log");
+        assert!(
+            !base.join("stray.log").exists(),
+            "RCLONE_LOG_FILE must not redirect the log"
+        );
         let counts = stopped.activity.counts;
-        assert_eq!((counts.folders_created, counts.copied, counts.errors), (2, 2, 0), "{counts:?}");
-        assert_eq!(counts.notices, 0, "the daemon's start-up notices (no config file) are not the job's");
+        assert_eq!(
+            (counts.folders_created, counts.copied, counts.errors),
+            (2, 2, 0),
+            "{counts:?}"
+        );
+        assert_eq!(
+            counts.notices, 0,
+            "the daemon's start-up notices (no config file) are not the job's"
+        );
         let events: Vec<_> = batches.lock().unwrap().iter().flat_map(|b| b.events.clone()).collect();
-        assert!(batches.lock().unwrap().iter().all(|b| b.daemon_id == info.id), "batches name their daemon");
-        let folders: Vec<_> = events.iter().filter(|e| e.kind == ActivityKind::FolderCreated).filter_map(|e| e.path.clone()).collect();
+        assert!(
+            batches.lock().unwrap().iter().all(|b| b.daemon_id == info.id),
+            "batches name their daemon"
+        );
+        let folders: Vec<_> = events
+            .iter()
+            .filter(|e| e.kind == ActivityKind::FolderCreated)
+            .filter_map(|e| e.path.clone())
+            .collect();
         assert_eq!(folders, ["empty", "sub"]);
-        assert!(events.iter().any(|e| e.kind == ActivityKind::Copied && e.path.as_deref() == Some("a.txt") && e.size == Some(200_000)));
-        assert_eq!(events.last().map(|e| e.seq), Some(stopped.activity.seq), "every event arrived before stop returned");
+        assert!(events
+            .iter()
+            .any(|e| e.kind == ActivityKind::Copied && e.path.as_deref() == Some("a.txt") && e.size == Some(200_000)));
+        assert_eq!(
+            events.last().map(|e| e.seq),
+            Some(stopped.activity.seq),
+            "every event arrived before stop returned"
+        );
 
         let log = std::fs::read_to_string(&log_path).unwrap();
         println!("--- log ---\n{log}");
         // local to local is a "server-side copy"
-        assert!(log.lines().any(|l| l.contains(" INFO  : a.txt: Copied (")), "readable text, not JSON");
+        assert!(
+            log.lines().any(|l| l.contains(" INFO  : a.txt: Copied (")),
+            "readable text, not JSON"
+        );
         assert!(!log.contains("{\"time\""));
         assert!(log.contains("Arcus summary"));
         assert!(log.trim_end().ends_with("Result: success"));
 
         // a transfer without a log file still reports what it does
         batches.lock().unwrap().clear();
-        let quiet = daemons.start(&paths, &settings, &binary, "Copy: quiet", None, sink).await.unwrap();
+        let quiet = daemons
+            .start(&paths, &settings, &binary, "Copy: quiet", None, sink)
+            .await
+            .unwrap();
         assert_eq!((quiet.log_path.as_ref(), quiet.log_level.as_ref()), (None, None));
         let client = daemons.client(&quiet.id).await.unwrap();
         run(&client, &base.join("dst2")).await;
-        let stopped = daemons.stop(&quiet.id, Some("Result: success".into())).await.unwrap().unwrap();
+        let stopped = daemons
+            .stop(&quiet.id, Some("Result: success".into()))
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(stopped.log_path, None);
-        assert_eq!((stopped.activity.counts.folders_created, stopped.activity.counts.copied), (2, 2));
-        assert_eq!(std::fs::read_dir(TransferDaemons::logs_dir(&paths)).unwrap().count(), 1, "only the logged transfer left a file");
+        assert_eq!(
+            (stopped.activity.counts.folders_created, stopped.activity.counts.copied),
+            (2, 2)
+        );
+        assert_eq!(
+            std::fs::read_dir(TransferDaemons::logs_dir(&paths)).unwrap().count(),
+            1,
+            "only the logged transfer left a file"
+        );
         let _ = std::fs::remove_dir_all(&base);
     }
 }

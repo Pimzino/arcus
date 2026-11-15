@@ -47,7 +47,7 @@ if (process.platform !== "darwin") {
 
 function findRclone() {
   if (process.env.ARCUS_TEST_BINARY) return process.env.ARCUS_TEST_BINARY;
-  const bin = join(homedir(), "Library/Application Support/com.rclonegui.desktop/bin");
+  const bin = join(homedir(), "Library/Application Support/Arcus/bin");
   const versions = existsSync(bin) ? readdirSync(bin).filter((v) => existsSync(join(bin, v, "rclone"))).sort() : [];
   if (!versions.length) throw new Error("No rclone found: set ARCUS_TEST_BINARY or let the app provision one.");
   return join(bin, versions[versions.length - 1], "rclone");

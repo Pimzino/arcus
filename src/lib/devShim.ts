@@ -247,6 +247,7 @@ export async function invoke(cmd: string, args: Record<string, unknown>): Promis
         transferLogsDir: "/dev/shim/logs/transfers",
         homeDir: import.meta.env.VITE_DEV_HOME ?? "/",
         pathSeparator: "/",
+        folderMoveError: null,
       };
     case "settings_get": {
       // Mirrors `migrate` in src-tauri/src/settings.rs: a settings file from before logging was the

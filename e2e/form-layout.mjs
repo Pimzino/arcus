@@ -185,6 +185,14 @@ await sleep(300);
 return JSON.stringify(result);`),
   ]);
   list.push([
+    "settings-transfers",
+    phase(`
+document.querySelector("#settings-transfers").scrollIntoView({ block: "start" });
+await sleep(300);
+const section = document.querySelector("#settings-transfers");
+return JSON.stringify({ pairs: pairs(section), rows: rows(section), sideways: sideways() });`),
+  ]);
+  list.push([
     "settings-engine",
     phase(`
 document.querySelector("#settings-engine").scrollIntoView({ block: "start" });
@@ -242,6 +250,7 @@ return JSON.stringify(result);`),
 const MIN_PAIRS = {
   "settings-email": 5,
   "settings-engine": 1,
+  "settings-transfers": 1,
   "watch-copy": 7,
   "watch-sync": 7,
   "watch-move": 7,

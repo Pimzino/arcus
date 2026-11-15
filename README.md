@@ -65,9 +65,12 @@ as a drive also needs [macFUSE](https://macfuse.github.io/) or [FUSE-T](https://
 ### Upgrading from Rclone GUI
 
 Arcus was called *Rclone GUI* up to v0.5.1. Install Arcus as usual; nothing needs to be exported or copied.
-Your settings, downloaded rclone versions, transfer history and logs stay where they are and Arcus picks
-them up, because they are stored under the app's identifier, `com.rclonegui.desktop`, which did not change.
-Your rclone config is rclone's own file and is not touched either.
+Up to v0.9.1 your settings, downloaded rclone versions, transfer history and logs were kept in folders named
+after the app's identifier, `com.rclonegui.desktop`. The first time a newer Arcus starts, it moves them to
+folders named Arcus (see [Where data lives](#where-data-lives)) and points its job history at the moved logs.
+If an older Arcus is run after that, it starts afresh in the old folders, and the newer one leaves them alone.
+If the move fails, Arcus says why, keeps using the old folders and tries again at its next start.
+Your rclone config is rclone's own file and is not touched.
 
 * **Windows:** both installers replace Rclone GUI, including its Start menu shortcut.
 * **macOS:** dragging Arcus into Applications leaves the old *Rclone GUI* app next to it. The first time Arcus
@@ -245,7 +248,7 @@ cargo test --manifest-path src-tauri/Cargo.toml -- --ignored provision_live --no
 # Live transfer test: runs real copies through a transfer's own rclone and
 # checks the activity and the log file. Needs an rclone binary; the one the
 # app installed will do (macOS: ~/Library/Application Support/
-# com.rclonegui.desktop/bin/<version>/rclone).
+# Arcus/bin/<version>/rclone).
 ARCUS_TEST_BINARY=/path/to/rclone cargo test --manifest-path src-tauri/Cargo.toml -- --ignored live_transfer --nocapture
 # Launch at login: writes the macOS and Linux login entries into a throwaway home
 # (never your own), checks them (plutil on macOS) and leaves them with a report in
@@ -275,6 +278,12 @@ node e2e/form-layout.mjs
 # 0.0.1 updates itself to 99.0.0 from a local latest.json, and that a tampered update is refused. Report,
 # tray menus and app logs in e2e/artifacts/macos-app/.
 node e2e/macos-app.mjs
+# Transfer defaults and the folder move (macOS, built app): a home in the pre-v0.9.2 layout moves to the Arcus
+# folders (job logs re-pointed, nothing left behind), both layouts present leaves the old one alone, a failed move
+# keeps the old folders and says so; a file dropped in the Explorer copies with the Settings defaults (--transfers,
+# --checkers, --bwlimit, checked on its rclone and by its speed). ARCUS_E2E_ROOT=<checkout> builds another
+# checkout. Report and app logs in e2e/artifacts/transfer-defaults-and-folders/.
+node e2e/transfer-defaults-and-folders.mjs
 # Update UI (macOS): the Settings rows, the notice and the update dialog in WebKit against the dev shim's
 # updater (found, nothing newer, offline, bad signature). Screenshots and report.json in e2e/artifacts/update-ui/.
 node e2e/update-ui.mjs
@@ -372,8 +381,8 @@ branding/                 logo, icons, fonts and the script that draws them (see
 
 | | macOS | Windows | Linux |
 | --- | --- | --- | --- |
-| rclone binaries, settings, job history | `~/Library/Application Support/com.rclonegui.desktop/` | `%APPDATA%\com.rclonegui.desktop\` | `~/.local/share/com.rclonegui.desktop/` |
-| app + daemon logs | `~/Library/Logs/com.rclonegui.desktop/` | `%LOCALAPPDATA%\com.rclonegui.desktop\logs\` | `~/.local/share/com.rclonegui.desktop/logs/` |
+| rclone binaries, settings, job history | `~/Library/Application Support/Arcus/` | `%APPDATA%\Arcus\` | `~/.local/share/arcus/` |
+| app + daemon logs | `~/Library/Logs/Arcus/` | `%LOCALAPPDATA%\Arcus\logs\` | `~/.local/share/arcus/logs/` |
 | rclone config | rclone's default (`rclone config file`) unless overridden in Settings | same | same |
 
 ## Continuous integration and releases

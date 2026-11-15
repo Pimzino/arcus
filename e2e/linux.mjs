@@ -1,7 +1,8 @@
 // End-to-end test of the real Linux build: starts the app under tauri-driver (WebDriver for Tauri, backed by
 // WebKitWebDriver) and uses it like a first-time user would.
 //
-//   1. First run: rclone is downloaded and verified from the Setup page, and the daemon starts.
+//   1. First run: rclone is downloaded and verified from the Setup page, and the daemon starts. A store file and
+//      a log in the pre-v0.9.2 folder (named after the identifier) have moved to the Arcus folder.
 //   2. The explorer opens a folder in each pane by typing its path.
 //   3. A file is selected and copied to the other pane: it arrives on disk, shows up in the other pane, and
 //      the transfer writes its log file.
@@ -53,7 +54,7 @@ const env = {
   XDG_DATA_HOME: join(home, ".local/share"),
   XDG_CACHE_HOME: join(home, ".cache"),
 };
-const dataDir = join(env.XDG_DATA_HOME, "com.rclonegui.desktop");
+const dataDir = join(env.XDG_DATA_HOME, "arcus");
 const src = join(home, "e2e-source");
 const dst = join(home, "e2e-destination");
 const FILE = "hello from arcus.txt";
@@ -71,6 +72,13 @@ const MAIL_PASSWORD = `e2e-${randomBytes(6).toString("hex")}`;
 const autostartEntry = join(env.XDG_CONFIG_HOME, "autostart", "arcus.desktop");
 for (const dir of [src, dst, watchSrc, watchDst, env.XDG_CONFIG_HOME, env.XDG_DATA_HOME, env.XDG_CACHE_HOME]) mkdirSync(dir, { recursive: true });
 writeFileSync(join(src, FILE), CONTENT);
+// Up to v0.9.1 the data and logs were in a folder named after the identifier, which on Linux is also the web
+// view's. A store file and a log from then must move to the Arcus folder at the first start; the folder stays.
+const oldDataDir = join(env.XDG_DATA_HOME, "com.rclonegui.desktop");
+mkdirSync(join(oldDataDir, "store"), { recursive: true });
+mkdirSync(join(oldDataDir, "logs"), { recursive: true });
+writeFileSync(join(oldDataDir, "store", "e2e-before-the-move.json"), JSON.stringify({ seeded: true }));
+writeFileSync(join(oldDataDir, "logs", "rclone-gui.log"), "the app log from before the rename\n");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (msg) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${msg}`);
@@ -341,6 +349,10 @@ try {
   const installed = readdirSync(join(dataDir, "bin"));
   if (!installed.length) throw new Error("the rclone binary is not in the app's data folder");
   check("rclone installed and its daemon running", { version, installed });
+  const moved = { store: existsSync(join(dataDir, "store", "e2e-before-the-move.json")), log: existsSync(join(dataDir, "logs", "rclone-gui.log")) };
+  const left = { store: existsSync(join(oldDataDir, "store")), logs: existsSync(join(oldDataDir, "logs")), folder: existsSync(oldDataDir) };
+  if (!moved.store || !moved.log || left.store || left.logs) throw new Error(`the old data and logs did not move to ${dataDir}: ${JSON.stringify({ moved, left })}`);
+  check("the data and logs from before v0.9.2 moved to the Arcus folder (the old one stays, the web view's)", { moved, left });
 
   // 2. Explorer, both panes on local folders.
   step = "2 explorer";

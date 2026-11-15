@@ -696,6 +696,7 @@ function TransfersCard() {
       title="Transfers & logs"
       description="Every transfer runs in an rclone process of its own, which is how the app can show what it is doing: folders being created, each file as it finishes, which file failed. Its log is also kept as a file, unless that is switched off. Old log files can be deleted automatically; the rows below say whether and when."
     >
+      <TransferDefaults key={`${s.defaultTransfers}|${s.defaultCheckers}|${s.defaultBwlimit}`} settings={s} />
       <SettingRow title="Save log files by default" description="Keeps a log file for every transfer, explorer copies and moves included. The transfer dialog can still switch it off for one job.">
         <Switch checked={logChoice.log} onChange={(v) => run("Could not save", () => saveSettings({ logTransfersByDefault: v }))} />
       </SettingRow>
@@ -753,6 +754,54 @@ function TransfersCard() {
         </>
       )}
     </SectionCard>
+  );
+}
+
+/**
+ * How much every transfer does at once, and its bandwidth: the dialog, explorer copies and drops, re-runs and
+ * watch folders alike, since each transfer's rclone starts with them (src-tauri transfers.rs). A transfer that
+ * sets its own value keeps it. Remounted (`key`) when the saved values change.
+ */
+function TransferDefaults({ settings }: { settings: Settings }) {
+  const saveSettings = useAppStore((s) => s.saveSettings);
+  const { busy, run } = useAsyncAction();
+  const [transfers, setTransfers] = useState(settings.defaultTransfers?.toString() ?? "");
+  const [checkers, setCheckers] = useState(settings.defaultCheckers?.toString() ?? "");
+  const [bwlimit, setBwlimit] = useState(settings.defaultBwlimit);
+  const count = (raw: string, what: string) => {
+    if (!raw.trim()) return null;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 1) throw new Error(`${what} must be a whole number of at least 1, or empty for rclone's default.`);
+    return n;
+  };
+  const dirty = transfers !== (settings.defaultTransfers?.toString() ?? "") || checkers !== (settings.defaultCheckers?.toString() ?? "") || bwlimit !== settings.defaultBwlimit;
+  const save = () =>
+    run(
+      "Could not save",
+      async () =>
+        saveSettings({ defaultTransfers: count(transfers, "Parallel transfers"), defaultCheckers: count(checkers, "Parallel checkers"), defaultBwlimit: bwlimit.trim() }),
+      "Saved · applies to transfers started from now on",
+    );
+  return (
+    <div data-transfer-defaults className="flex flex-col gap-3 border-b pb-4">
+      <SettingGrid>
+        <SettingField label="Parallel transfers" description={<>Files copied at once by every transfer, <span className="whitespace-nowrap font-mono text-xs">--transfers</span>. Empty: rclone's 4.</>}>
+          <Input type="number" min={1} aria-label="Default parallel transfers" value={transfers} placeholder="4" onChange={(e) => setTransfers(e.target.value)} />
+        </SettingField>
+        <SettingField label="Parallel checkers" description={<>Files compared at once, <span className="whitespace-nowrap font-mono text-xs">--checkers</span>. Empty: rclone's 8.</>}>
+          <Input type="number" min={1} aria-label="Default parallel checkers" value={checkers} placeholder="8" onChange={(e) => setCheckers(e.target.value)} />
+        </SettingField>
+        <SettingField label="Bandwidth limit" description={<>For each transfer on its own, <span className="whitespace-nowrap font-mono text-xs">--bwlimit</span>, e.g. 10M. Empty: unlimited.</>}>
+          <Input mono aria-label="Default bandwidth limit" value={bwlimit} placeholder="unlimited" onChange={(e) => setBwlimit(e.target.value)} />
+        </SettingField>
+      </SettingGrid>
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm text-muted-foreground">Every transfer starts with these: the transfer dialog, explorer copies and drops, re-runs and watch folders. A transfer that sets its own value keeps it.</p>
+        <Button variant="default" loading={busy} disabled={!dirty} onClick={save}>
+          Save defaults
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -1285,6 +1334,7 @@ function AboutCard() {
   return (
     <SectionCard icon={<Info />} title="About" description="This build of Arcus and the rclone it is running." bodyClassName="flex flex-col gap-4">
       <RcloneCredit />
+      {info?.folderMoveError && <ErrorMessage error={`${info.folderMoveError}. Arcus is using the old folders for now and tries again at its next start.`} />}
       <UpdatesRow />
       <KeyValue
         items={[

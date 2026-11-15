@@ -5,6 +5,8 @@
 import { ChevronDown, ChevronRight, ListChecks } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { formatLocation, type Location } from "../../lib/paths";
+import { defaultSettings } from "../../lib/types";
+import { useAppStore } from "../../store/app";
 import { Button, Checkbox, ChoiceGrid, Field, FormGrid, Input, Select, Textarea, cn } from "../ui";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { FilterPickerDialog } from "./FilterPicker";
@@ -377,6 +379,8 @@ export function TransferOptionSections({
   onResyncNextRun?: (v: boolean) => void;
 }) {
   const watch = variant === "watch";
+  // Left empty, a field takes the default from Settings → Transfers & logs, which every transfer's rclone starts with.
+  const defaults = useAppStore((s) => s.settings) ?? defaultSettings;
   const isSyncLike = form.mode === "copy" || form.mode === "sync" || form.mode === "move";
   const createsFolders = isSyncLike || form.mode === "bisync";
   const includes = lines(form.include);
@@ -415,11 +419,11 @@ export function TransferOptionSections({
         summary={[form.transfers && `${form.transfers} transfers`, form.checkers && `${form.checkers} checkers`, form.bwlimit && `${form.bwlimit}/s`, form.maxTransfer && `max ${form.maxTransfer}`].filter(Boolean).join(" · ") || "defaults"}
       >
         <FormGrid>
-          <Field layout="grid" label="Parallel transfers" help="Default 4">
-            <Input type="number" min={1} value={form.transfers} onChange={(e) => set("transfers", e.target.value)} placeholder="4" />
+          <Field layout="grid" label="Parallel transfers" help={defaults.defaultTransfers ? "Default from Settings" : "Default 4"}>
+            <Input type="number" min={1} value={form.transfers} onChange={(e) => set("transfers", e.target.value)} placeholder={String(defaults.defaultTransfers ?? 4)} />
           </Field>
-          <Field layout="grid" label="Parallel checkers" help="Default 8">
-            <Input type="number" min={1} value={form.checkers} onChange={(e) => set("checkers", e.target.value)} placeholder="8" />
+          <Field layout="grid" label="Parallel checkers" help={defaults.defaultCheckers ? "Default from Settings" : "Default 8"}>
+            <Input type="number" min={1} value={form.checkers} onChange={(e) => set("checkers", e.target.value)} placeholder={String(defaults.defaultCheckers ?? 8)} />
           </Field>
           <Field
             layout="grid"
@@ -428,7 +432,7 @@ export function TransferOptionSections({
             help={watch ? "e.g. 10M or 1G per second, for each run." : "e.g. 10M or 1G per second, for this transfer only."}
             error={errors.bwlimit}
           >
-            <Input value={form.bwlimit} onChange={(e) => set("bwlimit", e.target.value)} placeholder="unlimited" invalid={!!errors.bwlimit} />
+            <Input value={form.bwlimit} onChange={(e) => set("bwlimit", e.target.value)} placeholder={defaults.defaultBwlimit.trim() || "unlimited"} invalid={!!errors.bwlimit} />
           </Field>
           <Field layout="grid" label="Max transfer" help={watch ? "Each run stops after this much data, e.g. 10G." : "Stop after this much data, e.g. 10G."}>
             <Input value={form.maxTransfer} onChange={(e) => set("maxTransfer", e.target.value)} placeholder="unlimited" />

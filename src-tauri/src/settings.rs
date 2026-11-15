@@ -50,6 +50,14 @@ pub struct Settings {
     pub transfer_log_cleanup_interval_hours: u32,
     /// Whether a sweep also runs when the app starts.
     pub transfer_log_cleanup_on_start: bool,
+    /// `--transfers` for the rclone of every transfer (dialog, explorer copies and drops, re-runs, watch
+    /// folders): files transferred at once. `None` is rclone's own default, 4. A job's own choice still wins.
+    pub default_transfers: Option<u32>,
+    /// `--checkers` for the rclone of every transfer: files compared at once. `None` is rclone's default, 8.
+    pub default_checkers: Option<u32>,
+    /// `--bwlimit` for the rclone of every transfer, e.g. `10M`; each transfer is limited on its own. Empty:
+    /// unlimited.
+    pub default_bwlimit: String,
     /// Show the tray / menu bar icon, with running transfers' progress in its menu. Background mode shows it
     /// whatever this says, since it is the way back in to a hidden window.
     pub show_tray_icon: bool,
@@ -119,6 +127,9 @@ impl Default for Settings {
             transfer_log_retention_days: 30,
             transfer_log_cleanup_interval_hours: 24,
             transfer_log_cleanup_on_start: true,
+            default_transfers: None,
+            default_checkers: None,
+            default_bwlimit: String::new(),
             show_tray_icon: true,
             run_in_background: false,
             launch_at_login: false,
@@ -145,6 +156,23 @@ fn migrate(settings: &mut Settings) -> bool {
     }
     settings.settings_version = SETTINGS_VERSION;
     true
+}
+
+impl Settings {
+    /// The rclone flags that carry the transfer defaults to a transfer's rclone.
+    pub fn transfer_default_flags(&self) -> Vec<String> {
+        let mut flags = Vec::new();
+        if let Some(n) = self.default_transfers {
+            flags.extend(["--transfers".to_string(), n.to_string()]);
+        }
+        if let Some(n) = self.default_checkers {
+            flags.extend(["--checkers".to_string(), n.to_string()]);
+        }
+        if !self.default_bwlimit.trim().is_empty() {
+            flags.extend(["--bwlimit".to_string(), self.default_bwlimit.trim().to_string()]);
+        }
+        flags
+    }
 }
 
 pub fn load(path: &Path) -> Settings {
@@ -190,14 +218,20 @@ mod tests {
     fn files_without_a_version_read_as_version_0() {
         let settings = old_file(r#"{"jobExpireDuration":"24h"}"#);
         assert_eq!(settings.settings_version, 0);
-        assert_eq!(settings.daemon_log_level, "INFO", "other missing fields still take the defaults");
+        assert_eq!(
+            settings.daemon_log_level, "INFO",
+            "other missing fields still take the defaults"
+        );
     }
 
     #[test]
     fn the_old_expiry_default_is_migrated_once() {
         let mut settings = old_file(r#"{"jobExpireDuration":"24h"}"#);
         assert!(migrate(&mut settings));
-        assert_eq!((settings.settings_version, settings.job_expire_duration.as_str()), (SETTINGS_VERSION, "1h"));
+        assert_eq!(
+            (settings.settings_version, settings.job_expire_duration.as_str()),
+            (SETTINGS_VERSION, "1h")
+        );
 
         settings.job_expire_duration = "24h".to_string();
         assert!(!migrate(&mut settings), "24h chosen after the update");
@@ -215,7 +249,10 @@ mod tests {
     fn logging_is_switched_on_once() {
         let mut settings = old_file(r#"{"settingsVersion":1,"logTransfersByDefault":false}"#);
         assert!(migrate(&mut settings));
-        assert_eq!((settings.log_transfers_by_default, settings.settings_version), (true, SETTINGS_VERSION));
+        assert_eq!(
+            (settings.log_transfers_by_default, settings.settings_version),
+            (true, SETTINGS_VERSION)
+        );
 
         settings.log_transfers_by_default = false;
         assert!(!migrate(&mut settings), "turned off after the update");
@@ -224,8 +261,7 @@ mod tests {
 
     #[test]
     fn version_1_files_do_not_repeat_the_expiry_migration() {
-        let mut settings =
-            old_file(r#"{"settingsVersion":1,"jobExpireDuration":"24h","logTransfersByDefault":false}"#);
+        let mut settings = old_file(r#"{"settingsVersion":1,"jobExpireDuration":"24h","logTransfersByDefault":false}"#);
         assert!(migrate(&mut settings));
         assert_eq!(settings.job_expire_duration, "24h", "step 1 only applies to version 0");
         assert!(settings.log_transfers_by_default);
@@ -236,7 +272,11 @@ mod tests {
         let mut settings = old_file(r#"{"jobExpireDuration":"24h","logTransfersByDefault":false}"#);
         assert!(migrate(&mut settings));
         assert_eq!(
-            (settings.job_expire_duration.as_str(), settings.log_transfers_by_default, settings.settings_version),
+            (
+                settings.job_expire_duration.as_str(),
+                settings.log_transfers_by_default,
+                settings.settings_version
+            ),
             ("1h", true, SETTINGS_VERSION)
         );
     }
@@ -246,7 +286,10 @@ mod tests {
         let path = temp_settings_path("migrate");
         std::fs::write(&path, r#"{"jobExpireDuration":"24h","theme":"dark"}"#).unwrap();
         let settings = load(&path);
-        assert_eq!((settings.job_expire_duration.as_str(), settings.theme.as_str()), ("1h", "dark"));
+        assert_eq!(
+            (settings.job_expire_duration.as_str(), settings.theme.as_str()),
+            ("1h", "dark")
+        );
         let saved: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(saved["jobExpireDuration"], "1h");
         assert_eq!(saved["settingsVersion"], SETTINGS_VERSION);
@@ -260,7 +303,11 @@ mod tests {
         let path = temp_settings_path("fresh");
         let settings = load(&path);
         assert_eq!(
-            (settings.settings_version, settings.job_expire_duration.as_str(), settings.log_transfers_by_default),
+            (
+                settings.settings_version,
+                settings.job_expire_duration.as_str(),
+                settings.log_transfers_by_default
+            ),
             (SETTINGS_VERSION, "1h", true)
         );
         assert!(!path.exists());

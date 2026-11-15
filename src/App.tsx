@@ -5,8 +5,9 @@ import { Sidebar } from "./components/app/Sidebar";
 import { StatusBar } from "./components/app/StatusBar";
 import { UpdatePrompt } from "./components/app/Update";
 import { runE2eSteps } from "./lib/e2eDriver";
+import { openSettingsSection } from "./lib/email";
 import { listen } from "./lib/tauri";
-import { Button, EmptyState, ErrorMessage, Spinner, ToastViewport } from "./components/ui";
+import { Button, EmptyState, ErrorMessage, Spinner, ToastViewport, toast } from "./components/ui";
 import { ConsolePage } from "./pages/Console";
 import { ExplorerPage } from "./pages/Explorer";
 import { MountsPage } from "./pages/Mounts";
@@ -104,6 +105,19 @@ export default function App() {
       void loadWatches();
     }
   }, [ready, initError, hydrateJobs, loadWatches]);
+
+  // The data or log folder could not be moved to its Arcus name (src-tauri paths.rs); Settings → About says why.
+  const folderMoveError = useAppStore((s) => s.info?.folderMoveError);
+  useEffect(() => {
+    if (folderMoveError)
+      toast({
+        tone: "danger",
+        title: "Arcus could not move its folders",
+        description: "It is using the old ones for now and tries again at its next start.",
+        duration: 60_000,
+        action: { label: "Details", onClick: () => openSettingsSection("about") },
+      });
+  }, [folderMoveError]);
 
   // An end-to-end test's own steps (debug builds only; see e2eDriver.ts).
   useEffect(() => {

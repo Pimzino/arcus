@@ -32,6 +32,8 @@ use tauri::{Emitter, Manager};
 pub struct AppState {
     pub http: reqwest::Client,
     pub paths: AppPaths,
+    /// Why the data or log folder could not be moved to its Arcus name at this start (`paths::settle_folders`).
+    pub folder_move_error: Option<String>,
     pub settings: Mutex<Settings>,
     pub daemon: Daemon,
     pub transfer_daemons: TransferDaemons,
@@ -62,21 +64,35 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         // Updates of Arcus itself; `updater.rs` decides when, the plugin fetches, verifies and installs.
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .level(log::LevelFilter::Info)
-                .targets([
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
-                        file_name: Some("arcus".into()),
-                    }),
-                ])
-                .build(),
-        )
         .setup(|app| {
-            let data_dir = app.path().app_data_dir()?;
-            let logs_dir = app.path().app_log_dir()?;
-            let paths = AppPaths::new(data_dir, logs_dir);
+            // The folders move to their Arcus names here: after single-instance has handed a second launch over
+            // to the copy already running (so nothing moves under it), and before the log file is opened.
+            let settled = paths::settle_folders(&paths::folder_moves(app)?);
+            app.handle().plugin(
+                tauri_plugin_log::Builder::new()
+                    .level(log::LevelFilter::Info)
+                    .targets([
+                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
+                            path: settled.logs_dir.clone(),
+                            file_name: Some("arcus".into()),
+                        }),
+                    ])
+                    .build(),
+            )?;
+            for (from, to) in &settled.moved {
+                log::info!("moved {} to {}", from.display(), to.display());
+            }
+            for problem in paths::rewrite_stored_paths(&settled.data_dir, &settled.moved) {
+                log::error!("could not point stored paths at the moved folders: {problem}");
+            }
+            for note in &settled.left_behind {
+                log::warn!("{note}");
+            }
+            if let Some(error) = &settled.error {
+                log::error!("{error}");
+            }
+            let paths = AppPaths::new(settled.data_dir, settled.logs_dir);
             paths.ensure()?;
             let settings = settings::load(&paths.settings_file);
             let http = reqwest::Client::builder()
@@ -86,6 +102,7 @@ pub fn run() {
             app.manage(AppState {
                 http,
                 paths,
+                folder_move_error: settled.error,
                 settings: Mutex::new(settings),
                 daemon: Daemon::default(),
                 transfer_daemons: TransferDaemons::default(),
@@ -214,7 +231,11 @@ async fn prune_transfer_logs(handle: tauri::AppHandle) {
                 settings.transfer_log_cleanup_on_start,
             )
         };
-        let due = if starting { on_start } else { sweep_is_due(last_sweep, now, hours) };
+        let due = if starting {
+            on_start
+        } else {
+            sweep_is_due(last_sweep, now, hours)
+        };
         starting = false;
         // Switched off, nothing is swept and the reference stays put, so switching it back on
         // sweeps at the next wake-up when an interval has passed in the meantime.

@@ -52,6 +52,8 @@ export type AppInfo = {
   transferLogsDir: string;
   homeDir: string | null;
   pathSeparator: string;
+  /** Why the data or log folder could not be moved to its Arcus name at this start. */
+  folderMoveError: string | null;
 };
 
 /** The rclone process that runs one transfer. */
@@ -164,6 +166,12 @@ export type Settings = {
   transferLogCleanupIntervalHours: number;
   /** Whether the app also checks for old transfer logs when it starts. */
   transferLogCleanupOnStart: boolean;
+  /** `--transfers` for every transfer's rclone; null is rclone's default (4). A job's own choice wins. */
+  defaultTransfers: number | null;
+  /** `--checkers` for every transfer's rclone; null is rclone's default (8). */
+  defaultCheckers: number | null;
+  /** `--bwlimit` for every transfer's rclone, each limited on its own; empty is unlimited. */
+  defaultBwlimit: string;
   /** Show the tray / menu bar icon, with running transfers in its menu (always shown in background mode). */
   showTrayIcon: boolean;
   /** Closing the window keeps Arcus running in the tray / menu bar. */
@@ -400,6 +408,9 @@ export const defaultSettings: Settings = {
   transferLogRetentionDays: 30,
   transferLogCleanupIntervalHours: 24,
   transferLogCleanupOnStart: true,
+  defaultTransfers: null,
+  defaultCheckers: null,
+  defaultBwlimit: "",
   showTrayIcon: true,
   runInBackground: false,
   launchAtLogin: false,
