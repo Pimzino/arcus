@@ -2,6 +2,12 @@
 
 Every release of Arcus, newest first, with the commits it added since the release before it.
 
+## v0.11.0 (2026-11-16)
+
+- AI agents: an optional MCP server lets agents on this computer use Arcus ([95a6f69](https://github.com/Pimzino/arcus/commit/95a6f6906ea0875d18b583f666f19887e3f43bf2))
+
+All changes: [v0.10.0...v0.11.0](https://github.com/Pimzino/arcus/compare/v0.10.0...v0.11.0)
+
 ## v0.10.0 (2026-11-15)
 
 - The app wears the brand: two places and a span between them, drawn on every screen ([6285008](https://github.com/Pimzino/arcus/commit/6285008753e3ef10693fe199b41a487cfd8d234c))
