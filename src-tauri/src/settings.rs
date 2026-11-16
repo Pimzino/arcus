@@ -68,6 +68,34 @@ pub struct Settings {
     /// SMTP settings for email notifications. The password is not here: it is kept in its own file
     /// (`email.rs`), never sent to the UI.
     pub email: EmailSettings,
+    /// The MCP server that lets AI agents on this computer use Arcus (`mcp/`).
+    pub mcp: McpSettings,
+}
+
+/// The MCP server for local AI agents. See `mcp/`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct McpSettings {
+    /// Off by default: nothing listens until the user turns it on.
+    pub enabled: bool,
+    /// The port on 127.0.0.1. Agents are configured with it, so it never moves by itself.
+    pub port: u16,
+    /// Only the tools that change nothing.
+    pub read_only: bool,
+    /// Also the tools that run any rclone command or rc method, and the settings that choose what Arcus runs
+    /// (custom rclone binary, extra daemon flags and environment).
+    pub allow_commands: bool,
+}
+
+impl Default for McpSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            port: 45391,
+            read_only: false,
+            allow_commands: false,
+        }
+    }
 }
 
 /// How Arcus sends email notifications. See `email.rs`.
@@ -134,6 +162,7 @@ impl Default for Settings {
             run_in_background: false,
             launch_at_login: false,
             email: EmailSettings::default(),
+            mcp: McpSettings::default(),
         }
     }
 }

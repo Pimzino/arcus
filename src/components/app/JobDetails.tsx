@@ -445,6 +445,7 @@ export function JobDetailsDialog({ job, onClose }: { job: TrackedJob; onClose: (
               { label: job.destination ? "Source" : "Path", value: <PathValue path={job.source} mode="open" icon /> },
               ...(job.destination ? [{ label: "Destination", value: <PathValue path={job.destination} mode="open" icon /> }] : []),
               ...(job.watchId ? [{ label: "Started by", value: `Watch folder “${job.watchName ?? ""}”`, mono: false }] : []),
+              ...(job.agent ? [{ label: "Started by", value: `AI agent ${job.agent}`, mono: false }] : []),
               { label: "Started", value: formatDateTime(job.createdAt), mono: false },
               { label: "Finished", value: job.finishedAt ? formatDateTime(job.finishedAt) : isRunning ? "still running" : "–", mono: false },
               {

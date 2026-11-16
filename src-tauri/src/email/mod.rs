@@ -100,25 +100,7 @@ pub fn read_password(password_file: &Path) -> Option<String> {
 
 /// Save the password (owner-only on unix), or delete it for `None` or an empty one.
 pub fn write_password(password_file: &Path, password: Option<&str>) -> std::io::Result<()> {
-    let Some(password) = password.filter(|p| !p.is_empty()) else {
-        return match std::fs::remove_file(password_file) {
-            Err(err) if err.kind() != std::io::ErrorKind::NotFound => Err(err),
-            _ => Ok(()),
-        };
-    };
-    // Written to a fresh sibling and renamed over the old file, so the password is never readable by
-    // others even for a moment: the mode is set when the file is created, before anything is in it.
-    let tmp = password_file.with_extension("tmp");
-    let _ = std::fs::remove_file(&tmp);
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    let mut file = options.open(&tmp)?;
-    std::io::Write::write_all(&mut file, password.as_bytes())?;
-    file.sync_all()?;
-    drop(file);
-    std::fs::rename(&tmp, password_file)
+    crate::paths::write_private(password_file, password)
 }
 
 fn now_unix() -> u64 {

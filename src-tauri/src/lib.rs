@@ -12,6 +12,7 @@ mod email;
 mod error;
 mod file_manager;
 mod macos;
+mod mcp;
 mod paths;
 mod rclone;
 mod settings;
@@ -42,6 +43,8 @@ pub struct AppState {
     pub watch: watch::WatchEngine,
     /// What the email notifier last did (`email.rs`).
     pub email: email::EmailState,
+    /// The MCP server for AI agents on this computer (`mcp/`).
+    pub mcp: mcp::McpState,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -109,6 +112,7 @@ pub fn run() {
                 install_lock: tokio::sync::Mutex::new(()),
                 watch: watch::WatchEngine::default(),
                 email: email::EmailState::default(),
+                mcp: mcp::McpState::default(),
             });
             background::setup(app)?;
             updater::setup(app);
@@ -137,6 +141,11 @@ pub fn run() {
                 }
             });
 
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let settings = handle.state::<AppState>().settings.lock().unwrap().mcp.clone();
+                mcp::apply(&handle, &settings).await;
+            });
             tauri::async_runtime::spawn(prune_transfer_logs(app.handle().clone()));
             #[cfg(unix)]
             tauri::async_runtime::spawn(shutdown::quit_on_signals(app.handle().clone()));
@@ -192,6 +201,10 @@ pub fn run() {
             watch::watch_set_paused,
             watch::watch_history,
             watch::watch_jobs,
+            mcp::mcp_status,
+            mcp::mcp_regenerate_token,
+            mcp::mcp_register_tools,
+            mcp::mcp_reply,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

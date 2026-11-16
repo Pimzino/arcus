@@ -189,6 +189,7 @@ export function Switch({
   label,
   description,
   className,
+  ariaLabel,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
@@ -196,12 +197,15 @@ export function Switch({
   label?: ReactNode;
   description?: ReactNode;
   className?: string;
+  /** The switch's name for assistive technology, where no `label` is shown with it (a SettingRow's title). */
+  ariaLabel?: string;
 }) {
   const control = (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={ariaLabel}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(

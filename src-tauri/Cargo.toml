@@ -48,6 +48,14 @@ notify = { version = "8.2.0", default-features = false, features = ["macos_fseve
 # Email notifications (email.rs): async SMTP on tokio with the same native-tls the app's reqwest uses.
 lettre = { version = "0.11.23", default-features = false, features = ["smtp-transport", "builder", "tokio1", "tokio1-native-tls"] }
 
+# The MCP server for local AI agents (mcp/): HTTP/1.1 on 127.0.0.1. The same hyperium crates reqwest already
+# brings in, with their server side switched on; the MCP protocol itself is written here. base64 decodes
+# `Mcp-Name` header values (the version already in the tree).
+hyper = { version = "1.11", default-features = false, features = ["server", "http1"] }
+hyper-util = { version = "0.1.20", default-features = false, features = ["tokio"] }
+http-body-util = "0.1.5"
+base64 = "0.22.1"
+
 # Asking the workspace whether a folder is a package (an `.app` bundle and friends), so
 # that "show in Finder" never launches one. Same crates and features the opener plugin uses.
 # NSFileManager moves the pre-rename "Rclone GUI.app" to the Bin (see macos::legacy_installs).

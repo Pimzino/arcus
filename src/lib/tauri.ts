@@ -20,6 +20,7 @@ import {
   type LatestVersion,
   type LocalRoot,
   type LocalStat,
+  type McpStatus,
   type MacPermissions,
   type MacPrivacyPane,
   type RcloneStatus,
@@ -139,4 +140,13 @@ export const api = {
   watchSetPaused: (paused: boolean) => invoke<void>("watch_set_paused", { paused }),
   watchHistory: (id: string) => invoke<WatchRun[]>("watch_history", { id }),
   watchJobs: () => invoke<WatchJob[]>("watch_jobs"),
+
+  /** The MCP server for AI agents (src-tauri mcp/). Calls arrive as `mcp:call`, each ended call as `mcp:activity`. */
+  mcpStatus: () => invoke<McpStatus>("mcp_status"),
+  mcpRegenerateToken: () => invoke<McpStatus>("mcp_regenerate_token"),
+  /** The tools this window runs; registered once it has loaded. */
+  mcpRegisterTools: (tools: { definition: unknown; commands: boolean }[]) => invoke<void>("mcp_register_tools", { tools }),
+  /** The answer to one `mcp:call`: its result, or a message for the agent. */
+  mcpReply: (id: string, reply: { result: unknown } | { error: string }) =>
+    invoke<void>("mcp_reply", { id, result: "result" in reply ? reply.result : null, error: "error" in reply ? reply.error : null }),
 };

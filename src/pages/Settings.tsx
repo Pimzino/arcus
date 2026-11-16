@@ -1,5 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Bot,
+  Copy,
   Download,
   ExternalLink,
   FileCog,
@@ -58,7 +60,7 @@ import {
   toast,
 } from "../components/ui";
 import { formatDateTime } from "../lib/format";
-import { openExternal, pickFile } from "../lib/native";
+import { copyToClipboard, openExternal, pickFile } from "../lib/native";
 import { rc } from "../lib/rc";
 import {
   EMAIL_DEFAULT_PORTS,
@@ -72,7 +74,7 @@ import {
 } from "../lib/email";
 import { currentSection } from "../lib/scrollSpy";
 import { rememberSessionOptions } from "../lib/sessionOptions";
-import { api, isTauri } from "../lib/tauri";
+import { api, isTauri, listen } from "../lib/tauri";
 import { defaultLogChoice } from "../lib/transferLog";
 import { defaultSettings, errorMessage, type EmailSettings, type LatestVersion, type RcOption, type Settings } from "../lib/types";
 import { useAppStore, useDaemonRunning } from "../store/app";
@@ -85,6 +87,7 @@ const SECTIONS = [
   { id: "transfers", label: "Transfers & logs", icon: <ScrollText /> },
   { id: "background", label: "Background", icon: <Power /> },
   { id: "email", label: "Email notifications", icon: <Mail /> },
+  { id: "agents", label: "AI agents", icon: <Bot /> },
   { id: "options", label: "Global options", icon: <SlidersHorizontal /> },
   { id: "macos", label: "macOS permissions", icon: <ShieldCheck /> },
   { id: "appearance", label: "Appearance", icon: <Palette /> },
@@ -121,6 +124,9 @@ export function SettingsPage() {
             </Section>
             <Section id="email">
               <EmailCard />
+            </Section>
+            <Section id="agents">
+              <AgentsCard />
             </Section>
             <Section id="options">
               <GlobalOptionsCard />
@@ -802,6 +808,166 @@ function TransferDefaults({ settings }: { settings: Settings }) {
         </Button>
       </div>
     </div>
+  );
+}
+
+/** How each kind of client is pointed at the server. */
+function agentSetup(client: "claude" | "codex" | "json", url: string, token: string): string {
+  switch (client) {
+    case "claude":
+      return `claude mcp add --transport http --scope user arcus ${url} --header "Authorization: Bearer ${token}"`;
+    case "codex":
+      return `export ARCUS_MCP_TOKEN=${token}\ncodex mcp add arcus --url ${url} --bearer-token-env-var ARCUS_MCP_TOKEN`;
+    case "json":
+      return JSON.stringify({ mcpServers: { arcus: { type: "http", url, headers: { Authorization: `Bearer ${token}` } } } }, null, 2);
+  }
+}
+
+function AgentsCard() {
+  const settings = useAppStore((s) => s.settings);
+  const saveSettings = useAppStore((s) => s.saveSettings);
+  const { busy, run } = useAsyncAction();
+  const status = useQuery({ queryKey: ["mcpStatus"], queryFn: () => api.mcpStatus(), enabled: isTauri });
+  const refetch = status.refetch;
+  useEffect(() => {
+    const off = listen("mcp:activity", () => void refetch());
+    return () => void off.then((unlisten) => unlisten());
+  }, [refetch]);
+  const mcp = (settings ?? defaultSettings).mcp;
+  const [port, setPort] = useState(String(mcp.port));
+  useEffect(() => setPort(String(mcp.port)), [mcp.port]);
+  const [client, setClient] = useState<"claude" | "codex" | "json">("claude");
+  const [showToken, setShowToken] = useState(false);
+
+  const save = (patch: Partial<typeof mcp>) =>
+    run("Could not save", async () => {
+      try {
+        await saveSettings({ mcp: { ...mcp, ...patch } });
+      } finally {
+        await refetch();
+      }
+    });
+  const parsedPort = parsePort(port);
+  const st = status.data;
+  const copy = (text: string) => copyToClipboard(text).then(() => toast({ tone: "success", title: "Copied" }));
+
+  return (
+    <SectionCard
+      icon={<Bot />}
+      title="AI agents"
+      description="Let AI agents on this computer, such as Claude Code, Codex or Cursor, use Arcus through MCP: browse remotes, run transfers, look after watch folders. Whatever they do shows here, as if done by hand."
+    >
+      <SettingRow title="Let AI agents use Arcus" description="Starts an MCP server on this computer only (127.0.0.1). Agents need its access token.">
+        <Switch ariaLabel="Let AI agents use Arcus" checked={mcp.enabled} onChange={(v) => save({ enabled: v })} />
+      </SettingRow>
+      <SettingRow title="Port" description="Agents are set up with it, so it never changes by itself.">
+        <div className="flex items-center gap-2">
+          <Input type="number" min={1} max={65535} aria-label="MCP server port" className="w-28" value={port} invalid={!parsedPort} onChange={(e) => setPort(e.target.value)} />
+          <Button variant="outline" loading={busy} disabled={!parsedPort || parsedPort === mcp.port} onClick={() => parsedPort && save({ port: parsedPort })}>
+            Save
+          </Button>
+        </div>
+      </SettingRow>
+      <SettingRow title="Read only" description="Agents can look at remotes, folders, transfers and settings, but change nothing.">
+        <Switch ariaLabel="Read only" checked={mcp.readOnly} onChange={(v) => save({ readOnly: v })} />
+      </SettingRow>
+      <SettingRow
+        title="Allow rclone commands"
+        description="Also lets agents run any rclone command or remote control call, as the Console does, give rclone options that run programs (raw options, sftp’s ssh command…), and change the settings that choose what Arcus runs. Only for agents you trust with this computer."
+      >
+        <Switch ariaLabel="Allow rclone commands" checked={mcp.allowCommands} onChange={(v) => save({ allowCommands: v })} />
+      </SettingRow>
+      {mcp.enabled && st && (
+        <div className="flex flex-col gap-3 border-t pt-4">
+          {st.error ? (
+            <Callout tone="danger" title="Not listening">
+              {st.error}
+            </Callout>
+          ) : (
+            <KeyValue
+              items={[
+                {
+                  label: "Server",
+                  value: st.listening ? (
+                    <StatusBadge tone="success">{`Listening · ${st.pageReady ? `${st.toolCount} tools` : "starting"}`}</StatusBadge>
+                  ) : (
+                    <StatusBadge>Starting</StatusBadge>
+                  ),
+                  mono: false,
+                },
+                { label: "Address", value: st.url ?? "" },
+                {
+                  label: "Access token",
+                  value: (
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="break-all">{showToken ? st.token : "•".repeat(24)}</span>
+                      <Button variant="ghost" size="xs" onClick={() => setShowToken(!showToken)}>
+                        {showToken ? "Hide" : "Show"}
+                      </Button>
+                      <Button variant="ghost" size="xs" icon={<Copy />} onClick={() => st.token && void copy(st.token)}>
+                        Copy
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        icon={<RefreshCw />}
+                        onClick={() => run("Could not replace the token", async () => void (await api.mcpRegenerateToken(), await refetch()), "New token made; set your agents up again")}
+                      >
+                        New token
+                      </Button>
+                    </span>
+                  ),
+                },
+              ]}
+            />
+          )}
+          {st.url && st.token && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium">Set up an agent</span>
+                <Segmented
+                  size="sm"
+                  label="Agent"
+                  value={client}
+                  onChange={setClient}
+                  options={[
+                    { value: "claude", label: "Claude Code" },
+                    { value: "codex", label: "Codex" },
+                    { value: "json", label: "mcp.json" },
+                  ]}
+                />
+              </div>
+              <pre className="selectable overflow-x-auto overscroll-none border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap break-all">
+                {agentSetup(client, st.url, showToken ? st.token : "<token>")}
+              </pre>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  {client === "json" ? "For Cursor, Windsurf and other clients that read an mcp.json; some name the key “servers”." : "Run it in a terminal; the agent then has Arcus's tools."}
+                </p>
+                <Button variant="outline" size="xs" icon={<Copy />} onClick={() => void copy(agentSetup(client, st.url!, st.token!))}>
+                  Copy with token
+                </Button>
+              </div>
+            </div>
+          )}
+          {st.recent.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-medium">Recent agent calls</span>
+              <ul className="flex max-h-56 flex-col overflow-y-auto overscroll-none text-xs">
+                {st.recent.map((c, i) => (
+                  <li key={i} className="flex items-baseline gap-2 border-t py-1 first:border-t-0">
+                    <span className="shrink-0 text-muted-foreground tabular-nums">{formatDateTime(c.atMs)}</span>
+                    <span className="shrink-0">{c.client}</span>
+                    <span className="font-mono">{c.tool}</span>
+                    {c.ok ? <span className="text-muted-foreground">{c.durationMs} ms</span> : <span className="min-w-0 truncate text-destructive" title={c.error ?? ""}>{c.error}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </SectionCard>
   );
 }
 

@@ -25,7 +25,9 @@ export function buildJobRequest(f: TransferForm): { rcPath: string; params: Reco
   // A selection of literal names (e.g. dropped items) names the job: "Copy report.pdf", "Move 3 items".
   const includes = lines(f.include);
   const literal = includes.map((l) => l.match(/^\/([^*?[\]{}]+?)(\/\*\*)?$/)?.[1]).filter((n): n is string => !!n);
-  const what = includes.length && literal.length === includes.length ? ` ${literal.length === 1 ? literal[0] : `${literal.length} items`}` : "";
+  // A name can come twice, as a file rule and a folder rule (what an agent's `items` write).
+  const names = [...new Set(literal)];
+  const what = includes.length && literal.length === includes.length ? ` ${names.length === 1 ? names[0] : `${names.length} items`}` : "";
   const title = `${label}${what}${f.dryRun ? " (dry run)" : ""}`;
 
   switch (f.mode) {

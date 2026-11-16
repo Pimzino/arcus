@@ -92,6 +92,7 @@ pub async fn settings_set(app: AppHandle, state: State<'_, AppState>, mut settin
     *state.settings.lock().unwrap() = settings.clone();
     // Tray icon and the launch-at-login entry follow the settings at once.
     crate::background::apply(&app, &settings);
+    crate::mcp::apply(&app, &settings.mcp).await;
     Ok(settings)
 }
 

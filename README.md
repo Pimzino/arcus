@@ -107,6 +107,29 @@ Your rclone config is rclone's own file and is not touched.
 * **Verified rclone:** the official binary, checked against rclone's PGP-signed checksums and kept private to
   the app. Pin a version or use your own binary, and edit any global rclone option, in Settings.
 
+### AI agents (MCP)
+
+Turn on **Settings → AI agents** and AI agents on this computer that speak the Model Context Protocol (Claude
+Code, Codex, Cursor, VS Code and others) can use Arcus the way you do: browse remotes and folders, create and
+edit remotes, start, follow, stop and re-run transfers, look after watch folders and mounts, and read or change
+settings. What an agent does shows in the window as if done by hand: its transfers are on the Transfers page
+marked with the agent's name, with their logs and email notifications, and a toast says what it changed.
+
+The server is off until you turn it on. It listens on `http://127.0.0.1:45391/mcp` (the port is yours to change)
+and nowhere else, and every request needs its access token, which Settings shows with a ready-made setup line for
+Claude Code, Codex and clients that read an `mcp.json`, for example:
+
+```bash
+claude mcp add --transport http --scope user arcus http://127.0.0.1:45391/mcp --header "Authorization: Bearer <token>"
+```
+
+**Read only** leaves agents only the tools that change nothing. **Allow rclone commands** (off until you turn it
+on) adds the Console's powers: any rclone command or rc method, raw rclone options and remote options that run a
+program (a metadata mapper, sftp's `ssh`, a `*_command`), and the settings that choose what Arcus runs.
+Agents can never change the AI agent settings themselves, and remotes that sign in through a browser (Google
+Drive, Dropbox, OneDrive…) are still made in the window. Arcus has to be running: it is the server. It speaks
+Streamable HTTP only; a client that can only start a local command (stdio) is not supported yet.
+
 ### Menu bar and tray
 
 Arcus puts an icon in the menu bar (macOS) or the system tray (Windows, Linux); turn it off in Settings →
@@ -296,6 +319,15 @@ node e2e/update-ui.mjs
 # new transfer form's two places with the operation's sign between them, and an aqueduct on the empty pages.
 # Screenshots and report.json in e2e/artifacts/design-redline/.
 node e2e/design-redline.mjs
+
+# AI agents (macOS, built app, needs `claude` signed in): the MCP server turned on in Settings, nothing on the
+# port while it is off; 401 without the token, 403 for a web page's Origin or another host name, 405 for GET;
+# clients of both protocol eras (initialize, and 2026-07-28's per-request _meta) and their error cases; secrets
+# hidden; a real agent (`claude -p`, haiku unless ARCUS_E2E_AGENT_MODEL) copies a folder, which lands on disk and
+# on the Transfers list as its own, with a log; a stop; read-only mode; the command tools; tools still answered
+# after 70 s hidden in the tray; a taken port reported in Settings. Report, every HTTP exchange, the agent's
+# output and app logs in e2e/artifacts/mcp-server/.
+node e2e/mcp-server.mjs
 ```
 
 ### Developing the UI in a browser

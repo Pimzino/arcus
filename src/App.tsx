@@ -6,6 +6,7 @@ import { StatusBar } from "./components/app/StatusBar";
 import { UpdatePrompt } from "./components/app/Update";
 import { runE2eSteps } from "./lib/e2eDriver";
 import { openSettingsSection } from "./lib/email";
+import { startMcpBridge } from "./lib/mcp/bridge";
 import { listen } from "./lib/tauri";
 import { Button, EmptyState, ErrorMessage, Spinner, ToastViewport, toast } from "./components/ui";
 import { ConsolePage } from "./pages/Console";
@@ -100,7 +101,10 @@ export default function App() {
   // needs the daemon, so that waits for it.
   useEffect(() => {
     if (ready && !initError) {
-      void hydrateJobs();
+      // Agents' tools work on the job list, so they are offered once it has loaded.
+      hydrateJobs()
+        .then(startMcpBridge)
+        .catch((e) => console.error("could not offer the AI agent tools", e));
       // The sidebar's badge counts rules in trouble, so the list is followed from the start.
       void loadWatches();
     }

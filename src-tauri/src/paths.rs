@@ -266,6 +266,29 @@ impl AppPaths {
     }
 }
 
+/// Write a secret to `path`, owner-only on unix, or delete it for `None` or an empty one. It is written to a fresh
+/// sibling and renamed over the old file, so it is never readable by others even for a moment: the mode is set
+/// when the file is created, before anything is in it.
+pub fn write_private(path: &std::path::Path, secret: Option<&str>) -> std::io::Result<()> {
+    let Some(secret) = secret.filter(|s| !s.is_empty()) else {
+        return match std::fs::remove_file(path) {
+            Err(err) if err.kind() != std::io::ErrorKind::NotFound => Err(err),
+            _ => Ok(()),
+        };
+    };
+    let tmp = path.with_extension("tmp");
+    let _ = std::fs::remove_file(&tmp);
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let mut file = options.open(&tmp)?;
+    std::io::Write::write_all(&mut file, secret.as_bytes())?;
+    file.sync_all()?;
+    drop(file);
+    std::fs::rename(&tmp, path)
+}
+
 /// Write `bytes` to `path` atomically (write to a sibling temp file, then rename).
 pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     let tmp = path.with_extension("tmp");

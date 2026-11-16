@@ -180,6 +180,37 @@ export type Settings = {
   launchAtLogin: boolean;
   /** SMTP settings; the password is stored apart (`api.emailSetPassword`) and never read back. */
   email: EmailSettings;
+  /** The MCP server for AI agents on this computer (src-tauri mcp/). */
+  mcp: McpSettings;
+};
+
+export type McpSettings = {
+  /** Off by default: nothing listens until it is turned on. */
+  enabled: boolean;
+  /** The port on 127.0.0.1. */
+  port: number;
+  /** Agents only get the tools that change nothing. */
+  readOnly: boolean;
+  /** Also the tools that run any rclone command or rc method, and the settings that choose what Arcus runs. */
+  allowCommands: boolean;
+};
+
+export const defaultMcpSettings: McpSettings = { enabled: false, port: 45391, readOnly: false, allowCommands: false };
+
+/** One tool call by an agent (`mcp:activity`). */
+export type McpCall = { atMs: number; client: string; tool: string; ok: boolean; error: string | null; durationMs: number };
+
+export type McpStatus = {
+  listening: boolean;
+  url: string | null;
+  /** Why it is not listening although it should (the port is taken, say). */
+  error: string | null;
+  /** The bearer token agents send; null until the server has first been turned on. */
+  token: string | null;
+  /** Whether this window has registered its tools, and how many the settings let agents see. */
+  pageReady: boolean;
+  toolCount: number;
+  recent: McpCall[];
 };
 
 export type NotifyPolicy = "never" | "failure" | "always";
@@ -415,6 +446,7 @@ export const defaultSettings: Settings = {
   runInBackground: false,
   launchAtLogin: false,
   email: defaultEmailSettings,
+  mcp: defaultMcpSettings,
 };
 
 export type InstalledRclone = {

@@ -58,6 +58,8 @@ export type TrackedJob = {
    */
   watchId?: string | null;
   watchName?: string | null;
+  /** Started by an AI agent through the MCP server: the agent's name. */
+  agent?: string | null;
 };
 
 export type StartJobInput = {
@@ -76,6 +78,8 @@ export type StartJobInput = {
    * without starting an rclone for it. A log file or a bandwidth limit needs the job's own rclone anyway.
    */
   shared?: boolean;
+  /** Started by an AI agent (MCP): its name, shown with the job. */
+  agent?: string | null;
 };
 
 type JobsStore = {
@@ -90,7 +94,7 @@ type JobsStore = {
    * Run a finished job again. A watch folder's job asks its rule to run now instead, whose transfer
    * then arrives as a job of its own, so there is no job to return (null).
    */
-  retry: (id: string) => Promise<TrackedJob | null>;
+  retry: (id: string, agent?: string) => Promise<TrackedJob | null>;
   /** Re-check running jobs after the daemon (re)started. */
   reconcile: () => Promise<void>;
 };
@@ -258,7 +262,7 @@ function notifyByEmail(job: TrackedJob, status: Exclude<JobStatusKind, "running"
     error,
     summary,
     logPath: job.logPath,
-    origin: "Transfer started by hand",
+    origin: job.agent ? `Transfer started by the AI agent ${job.agent}` : "Transfer started by hand",
     startedAtUnix: Math.floor(job.createdAt / 1000),
     finishedAtUnix: Math.floor(Date.now() / 1000),
   };
@@ -574,6 +578,7 @@ export const useJobsStore = create<JobsStore>((set, get) => {
           logPath: daemon?.logPath ?? null,
           logLevel: daemon?.logLevel ?? null,
           bwlimit: input.bwlimit ?? null,
+          agent: input.agent ?? null,
         };
         set((s) => ({ jobs: [job, ...s.jobs] }));
         await persist(get().jobs);
@@ -620,7 +625,7 @@ export const useJobsStore = create<JobsStore>((set, get) => {
       await persist(get().jobs);
     },
 
-    async retry(id) {
+    async retry(id, agent) {
       const job = get().jobs.find((j) => j.id === id);
       if (!job) throw new Error("job not found");
       if (job.watchId) {
@@ -640,6 +645,7 @@ export const useJobsStore = create<JobsStore>((set, get) => {
         log,
         bwlimit: job.bwlimit ?? null,
         shared: job.shared ?? false,
+        agent: agent ?? null,
       });
     },
   };

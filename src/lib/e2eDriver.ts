@@ -14,6 +14,7 @@ import { invoke } from "./tauri";
  * - `{ "fill": "aria-label", "value": "text" }`: type into the field with that label
  * - `{ "drop": "name", "from": 1, "to": 2 }`: drag the row of that name from one explorer pane onto the other, as
  *   a mouse would (dragstart on the row, dragover and drop on the pane)
+ * - `{ "switch": "aria-label", "on": true }`: set the switch with that label, by clicking it if it is not so already
  * - `{ "invoke": "command", "args"?: {…} }`: call a backend command; its answer goes to the report file
  */
 type Step =
@@ -24,6 +25,7 @@ type Step =
   | { page: Page }
   | { fill: string; value: string }
   | { drop: string; from: number; to: number }
+  | { switch: string; on: boolean }
   | { invoke: string; args?: Record<string, unknown> };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -82,6 +84,10 @@ export async function runE2eSteps() {
         target.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer }));
         await sleep(50);
         target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer }));
+      } else if ("switch" in step) {
+        const control = document.querySelector<HTMLButtonElement>(`button[role="switch"][aria-label="${CSS.escape(step.switch)}"]`);
+        if (!control) throw new Error(`no switch "${step.switch}"`);
+        if ((control.getAttribute("aria-checked") === "true") !== step.on) control.click();
       } else if ("invoke" in step) {
         await report({ invoke: step.invoke, answer: await invoke(step.invoke, step.args ?? {}) });
         continue;

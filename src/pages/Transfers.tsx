@@ -1,4 +1,4 @@
-import { ArrowLeftRight, CircleStop, FileText, FolderOpen, FolderSync, Info, MoreHorizontal, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Bot, CircleStop, FileText, FolderOpen, FolderSync, Info, MoreHorizontal, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Aqueduct, Arch } from "../components/app/Arch";
 import { useFileManager } from "../components/app/FileManager";
@@ -407,6 +407,12 @@ function JobRow({ job }: { job: TrackedJob }) {
             <div className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground" title={`Started by the watch folder “${job.watchName ?? ""}”`}>
               <FolderSync className="size-3 shrink-0" aria-hidden />
               <span className="truncate">Watch folder: {job.watchName}</span>
+            </div>
+          )}
+          {job.agent && (
+            <div className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground" title={`Started by the AI agent ${job.agent}`}>
+              <Bot className="size-3 shrink-0" aria-hidden />
+              <span className="truncate">AI agent: {job.agent}</span>
             </div>
           )}
           <Span className="mt-1.5 mb-1" source={job.source} destination={job.destination} {...jobProgress(job)} />
